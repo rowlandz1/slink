@@ -1,0 +1,27 @@
+alpha = _{ 'a'..'z' | 'A'..'Z' }
+digit = _{ '0'..'9' }
+WHITESPACE = _{ " " | "\t" | "\n" }
+
+ID    = @{ alpha ~ (alpha | digit)* }
+NUM   = @{ digit+ ~ ("." ~ digit+)? }
+BINOP = @{ "+" | "-" | "*" }
+
+stmt = {
+    stmt_assign
+  | expr ~ ";"
+}
+
+stmt_assign = { ID ~ "=" ~ expr ~ ";" }
+
+expr = { expr1 ~ (BINOP ~ expr1)* }
+
+expr1 = {
+    matrix
+  | "(" ~ expr ~ ")"
+  | NUM
+  | ID
+}
+
+matrix = { mat_row+ }
+
+mat_row = { "{" ~ expr+ ~ "}" }

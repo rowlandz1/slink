@@ -7,6 +7,7 @@ use crate::parser::{AstStmt, AstExpr};
 enum SciVal {
     Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
     Number(f64),
+    Closure(Environ, Vec<String>, AstExpr),
 }
 
 use SciVal::*;
@@ -20,6 +21,7 @@ impl ToOwned for SciVal {
                 Matrix(*r, *c, v.to_vec())
             }
             Number(n) => Number(*n),
+            Closure(env, params, inner_expr) => Closure(env.to_owned(), params.to_vec(), inner_expr.to_owned()),
         }
     }
 }
@@ -47,6 +49,8 @@ impl ops::Add<SciVal> for SciVal {
                 Matrix(r, c, ret)
             }
             (Number(n1), Number(n2)) => Number(n1 + n2),
+            (Closure(_,_,_), _) |
+            (_, Closure(_,_,_)) => panic!("Error, addition is not defined for closures"),
         }
     }
 }
@@ -81,12 +85,27 @@ impl ops::Mul<SciVal> for SciVal {
                 Matrix(r, c, ret)
             }
             (Number(n1), Number(n2)) => Number(n1 * n2),
+            (Closure(_,_,_), _) |
+            (_, Closure(_,_,_)) => panic!("Error, multiplication is not defined for closures"),
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Environ {
     var_store: HashMap<String, SciVal>,
+}
+
+impl ToOwned for Environ {
+    type Owned = Environ;
+
+    fn to_owned(&self) -> Environ {
+        let mut new_environ = Environ::new();
+        for (key, val) in self.var_store.iter() {
+            new_environ.var_store.insert(key.to_owned(), val.to_owned());
+        }
+        new_environ
+    }
 }
 
 impl Environ {
@@ -112,31 +131,29 @@ impl Environ {
             AstExpr::Binop(op, lhs, rhs) => {
                 let lhs = self.evaluate(*lhs);
                 let rhs = self.evaluate(*rhs);
-                if op.eq("+") {
-                    lhs + rhs
-                } else if op.eq("*") {
-                    lhs * rhs
-                } else {
-                    panic!("Unrecognized binary operator");
-                }
+                if op.eq("+") { lhs + rhs }
+                else if op.eq("-") { lhs + (Number(-1f64) * rhs) }
+                else if op.eq("*") { lhs * rhs }
+                else { panic!("Unrecognized binary operator"); }
             }
             AstExpr::Matrix(r, c, v) => {
                 let mut vret: Vec<f64> = vec![];
                 for subexpr in v {
                     match self.evaluate(subexpr) {
-                        Matrix(_, _, _) => panic!("Error! Non-numerical value in a matrix"),
+                        Matrix(_, _, _) |
+                        Closure(_, _, _) => panic!("Error! Non-numerical value in a matrix"),
                         Number(n) => vret.push(n),
                     }
                 }
                 Matrix(r, c, vret)
             }
+            AstExpr::Lambda(params, inner_expr) => {
+                Closure(self.to_owned(), params, *inner_expr)
+            }
             AstExpr::Num(n) => Number(n),
             AstExpr::Id(x) => {
                 let val = self.var_store.get(&x).expect("Error, x not defined");
-                match val {
-                    Matrix(r, c, v) => Matrix(*r, *c, v.to_owned()),
-                    Number(n) => Number(*n),
-                }
+                val.to_owned()
             }
         }
     }

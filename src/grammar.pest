@@ -2,9 +2,10 @@ alpha = _{ 'a'..'z' | 'A'..'Z' }
 digit = _{ '0'..'9' }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-ID    = @{ alpha ~ (alpha | digit)* }
-NUM   = @{ digit+ ~ ("." ~ digit+)? }
-BINOP = @{ "+" | "-" | "*" }
+ID     = @{ alpha ~ (alpha | digit)* }
+NUM    = @{ digit+ ~ ("." ~ digit+)? }
+BINOP0 = @{ "+" | "-" }
+BINOP1 = @{ "*" | "/" }
 
 stmt = {
     stmt_assign
@@ -13,15 +14,20 @@ stmt = {
 
 stmt_assign = { ID ~ "=" ~ expr ~ ";" }
 
-expr = { expr1 ~ (BINOP ~ expr1)* }
+expr  = { expr1 ~ (BINOP0 ~ expr1)* }
+expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
+expr2 = { expr_base }
 
-expr1 = {
+expr_base = {
     matrix
+  | lam_expr
   | "(" ~ expr ~ ")"
   | NUM
   | ID
 }
 
 matrix = { mat_row+ }
-
 mat_row = { "{" ~ expr+ ~ "}" }
+
+lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
+param_list = { ID+ }

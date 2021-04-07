@@ -4,7 +4,7 @@ use crate::parser::{AstStmt, AstExpr};
 
 
 #[derive(Debug)]
-enum SciVal {
+pub enum SciVal {
     Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
     Number(f64),
     Closure(Environ, Vec<String>, AstExpr),
@@ -134,36 +134,44 @@ impl Environ {
                 if op.eq("+") { lhs + rhs }
                 else if op.eq("-") { lhs + (Number(-1f64) * rhs) }
                 else if op.eq("*") { lhs * rhs }
+                else if op.eq(".") {
+                    todo!();
+                }
                 else { panic!("Unrecognized binary operator"); }
             }
             AstExpr::Matrix(r, c, v) => {
                 let mut vret: Vec<f64> = vec![];
                 for subexpr in v {
-                    match self.evaluate(subexpr) {
-                        Matrix(_, _, _) |
-                        Closure(_, _, _) => panic!("Error! Non-numerical value in a matrix"),
-                        Number(n) => vret.push(n),
-                    }
+                    if let Number(n) = self.evaluate(subexpr) {
+                        vret.push(n);
+                    } else { panic!("Error! Non-numerical value in a matrix"); }
                 }
                 Matrix(r, c, vret)
             }
             AstExpr::Lambda(params, inner_expr) => {
                 Closure(self.to_owned(), params, *inner_expr)
             }
-            AstExpr::FunApp(f, args) => {
-                let f_evaled = self.evaluate(*f);
-                match f_evaled {
-                    Closure(mut env, params, inner_expr) => {
-                        if params.len() != args.len() {
-                            panic!("Error: arity mismatch");
-                        }
+            AstExpr::FunApp(f, mut args) => {
+                if let Closure(mut env, mut params, inner_expr) = self.evaluate(*f) {
+                    if params.len() < args.len() {
+                        panic!("Error: arity mismatch. Too many arguments supplied.");
+                    }
+                    // full argument application
+                    else if params.len() == args.len() {
                         for (param, arg) in params.iter().zip(args) {
                             env.var_store.insert(param.to_owned(), self.evaluate(arg));
                         }
                         env.evaluate(inner_expr)
                     }
-                    _ => panic!("Error, cannot apply to a closure"),
-                }
+                    // partial application
+                    else {
+                        let params2 = params.split_off(params.len() - args.len());
+                        for (param, arg) in params2.iter().zip(args) {
+                            env.var_store.insert(param.to_owned(), self.evaluate(arg));
+                        }
+                        Closure(env, params, inner_expr)
+                    }
+                } else { panic!("Error, cannot apply arguments to a non-closure value") }
             }
             AstExpr::Num(n) => Number(n),
             AstExpr::Id(x) => {

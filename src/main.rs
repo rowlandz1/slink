@@ -5,7 +5,7 @@ extern crate pest;
 #[macro_use]
 extern crate pest_derive;
 
-use std::io::{stdin, stdout};
+use std::io::{stdin};
 use pest::{error::Error, iterators::Pair};
 use pest::Parser;
 

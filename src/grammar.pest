@@ -6,6 +6,7 @@ ID     = @{ alpha ~ (alpha | digit)* }
 NUM    = @{ digit+ ~ ("." ~ digit+)? }
 BINOP0 = @{ "+" | "-" }
 BINOP1 = @{ "*" | "/" }
+BINOP2 = @{ "." }
 
 stmt = {
     stmt_assign
@@ -16,7 +17,8 @@ stmt_assign = { ID ~ "=" ~ expr ~ ";" }
 
 expr  = { expr1 ~ (BINOP0 ~ expr1)* }
 expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
-expr2 = { expr_base }
+expr2 = { expr3 ~ (BINOP2 ~ expr3)* }
+expr3 = { expr_base }
 
 expr_base = {
     matrix

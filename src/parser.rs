@@ -72,25 +72,23 @@ pub fn get_ast_stmt(stmt: Pair<Rule>) -> AstStmt {
 pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
     match expr.as_rule() {
         Rule::expr |
-        Rule::expr1 => {
+        Rule::expr1 |
+        Rule::expr2 => {
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
             loop {
                 let op = inner_rules.next();
-                match op {
-                    Some(op) => {
-                        let op = op.as_str().to_string();
-                        let operand2 = get_ast_expr(inner_rules.next().unwrap());
-                        ret = Binop(op, Box::new(ret), Box::new(operand2));
-                    }
-                    None => break,
-                }
+                if let Some(op) = op {
+                    let op = op.as_str().to_string();
+                    let operand2 = get_ast_expr(inner_rules.next().unwrap());
+                    ret = Binop(op, Box::new(ret), Box::new(operand2));
+                } else { break; }
             }
 
             ret
         }
-        Rule::expr2 |
+        Rule::expr3 |
         Rule ::expr_base => {
             get_ast_expr(expr.into_inner().next().unwrap())
         }

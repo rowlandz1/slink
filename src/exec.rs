@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use core::ops;
 use crate::parser::{AstStmt, AstExpr};
 
-
 #[derive(Debug)]
 pub enum SciVal {
     Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
@@ -135,7 +134,13 @@ impl Environ {
                 else if op.eq("-") { lhs + (Number(-1f64) * rhs) }
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq(".") {
-                    todo!();
+                    if let (Closure(e1, p1, b1), Closure(e2, p2, b2)) = (lhs, rhs) {
+                        if p2.len() != 1 {
+                            panic!("Error, second function in function composition must take 1 argument");
+                        }
+                        todo!();
+
+                    } else { panic!("Error, function composition is not defined for non-closure types") }
                 }
                 else { panic!("Unrecognized binary operator"); }
             }
@@ -151,7 +156,14 @@ impl Environ {
             AstExpr::Lambda(params, inner_expr) => {
                 Closure(self.to_owned(), params, *inner_expr)
             }
-            AstExpr::FunApp(f, mut args) => {
+            AstExpr::Let(bindings, inner_expr) => {
+                for (v, e) in bindings {
+                    let e_evaled = self.evaluate(e);
+                    self.var_store.insert(v, e_evaled);
+                }
+                self.evaluate(*inner_expr)
+            }
+            AstExpr::FunApp(f, args) => {
                 if let Closure(mut env, mut params, inner_expr) = self.evaluate(*f) {
                     if params.len() < args.len() {
                         panic!("Error: arity mismatch. Too many arguments supplied.");

@@ -25,7 +25,7 @@ fn main() {
             .next().unwrap();
         //println!("DEBUG: STMT: {:?}", stmt);
         let ast = parser::get_ast_stmt(stmt);
-        //println!("DEBUG: AST: {:?}", ast);
+        println!("DEBUG: AST: {:?}", ast);
         environ.execute(ast);
     }
 }

@@ -24,6 +24,7 @@ expr_base = {
     matrix
   | lam_expr
   | fun_app
+  | let_expr
   | "(" ~ expr ~ ")"
   | NUM
   | ID
@@ -40,3 +41,6 @@ fun_app = {
   | "(" ~ expr ~ ")" ~ "(" ~ arg_list ~ ")"
 }
 arg_list = { expr ~ ("," ~ expr)* }
+
+let_expr = { "let" ~ var_bindings ~ "in" ~ expr }
+var_bindings = { ID ~ "=" ~ expr ~ ("," ~ ID ~ "=" ~ expr)* }

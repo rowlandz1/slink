@@ -17,6 +17,7 @@ pub enum AstExpr {
     Binop(String, Box<AstExpr>, Box<AstExpr>),
     Lambda(Vec<String>, Box<AstExpr>),
     FunApp(Box<AstExpr>, Vec<AstExpr>),
+    Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     Num(f64),
     Id(String),
@@ -35,6 +36,14 @@ impl ToOwned for AstExpr {
                     newargs.push(args[i].to_owned());
                 }
                 FunApp(Box::new((*f).to_owned()), newargs)
+            }
+            Let(bindings, e) => {
+                let mut newbindings: Vec<(String, AstExpr)> = vec![];
+                for i in 0..bindings.len() {
+                    let (v, e1) = &bindings[i];
+                    newbindings.push((v.to_owned(), e1.to_owned()));
+                }
+                Let(newbindings, Box::new((*e).to_owned()))
             }
             Matrix(r, c, v) => {
                 let mut newv: Vec<AstExpr> = vec![];
@@ -136,6 +145,20 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
                 arg_vec.push(get_ast_expr(pair));
             }
             FunApp(Box::new(f), arg_vec)
+        }
+        Rule::let_expr => {
+            let mut inner_rules = expr.into_inner();
+            let mut bindings: Vec<(String, AstExpr)> = vec![];
+            let mut inner1 = inner_rules.next().unwrap().into_inner();
+            loop {
+                if let Some(id) = inner1.next() {
+                    let id = id.as_str().to_string();
+                    let boundexpr = get_ast_expr(inner1.next().unwrap());
+                    bindings.push((id, boundexpr));
+                } else { break; }
+            }
+            let inner_expr = get_ast_expr(inner_rules.next().unwrap());
+            Let(bindings, Box::new(inner_expr))
         }
         Rule::ID => {
             Id(expr.as_str().to_string())

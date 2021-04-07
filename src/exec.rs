@@ -150,6 +150,21 @@ impl Environ {
             AstExpr::Lambda(params, inner_expr) => {
                 Closure(self.to_owned(), params, *inner_expr)
             }
+            AstExpr::FunApp(f, args) => {
+                let f_evaled = self.evaluate(*f);
+                match f_evaled {
+                    Closure(mut env, params, inner_expr) => {
+                        if params.len() != args.len() {
+                            panic!("Error: arity mismatch");
+                        }
+                        for (param, arg) in params.iter().zip(args) {
+                            env.var_store.insert(param.to_owned(), self.evaluate(arg));
+                        }
+                        env.evaluate(inner_expr)
+                    }
+                    _ => panic!("Error, cannot apply to a closure"),
+                }
+            }
             AstExpr::Num(n) => Number(n),
             AstExpr::Id(x) => {
                 let val = self.var_store.get(&x).expect("Error, x not defined");

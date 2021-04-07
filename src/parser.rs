@@ -16,6 +16,7 @@ pub enum AstStmt {
 pub enum AstExpr {
     Binop(String, Box<AstExpr>, Box<AstExpr>),
     Lambda(Vec<String>, Box<AstExpr>),
+    FunApp(Box<AstExpr>, Vec<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     Num(f64),
     Id(String),
@@ -28,6 +29,13 @@ impl ToOwned for AstExpr {
         match self {
             Binop(op, lhs, rhs) => Binop(op.to_owned(), Box::new((*lhs).to_owned()), Box::new((*rhs).to_owned())),
             Lambda(params, inner_expr) => Lambda(params.to_vec(), Box::new((*inner_expr).to_owned())),
+            FunApp(f, args) => {
+                let mut newargs: Vec<AstExpr> = vec![];
+                for i in 0..args.len() {
+                    newargs.push(args[i].to_owned());
+                }
+                FunApp(Box::new((*f).to_owned()), newargs)
+            }
             Matrix(r, c, v) => {
                 let mut newv: Vec<AstExpr> = vec![];
                 for i in 0..v.len() {
@@ -121,6 +129,15 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
             Lambda(param_vec, Box::new(inner_expr))
+        }
+        Rule::fun_app => {
+            let mut arg_vec: Vec<AstExpr> = vec![];
+            let mut inner_rules = expr.into_inner();
+            let f = get_ast_expr(inner_rules.next().unwrap());
+            for pair in inner_rules.next().unwrap().into_inner() {
+                arg_vec.push(get_ast_expr(pair));
+            }
+            FunApp(Box::new(f), arg_vec)
         }
         Rule::ID => {
             Id(expr.as_str().to_string())

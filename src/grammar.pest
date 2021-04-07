@@ -21,6 +21,7 @@ expr2 = { expr_base }
 expr_base = {
     matrix
   | lam_expr
+  | fun_app
   | "(" ~ expr ~ ")"
   | NUM
   | ID
@@ -31,3 +32,9 @@ mat_row = { "{" ~ expr+ ~ "}" }
 
 lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
 param_list = { ID+ }
+
+fun_app = {
+    ID ~ "(" ~ arg_list ~ ")"
+  | "(" ~ expr ~ ")" ~ "(" ~ arg_list ~ ")"
+}
+arg_list = { expr ~ ("," ~ expr)* }

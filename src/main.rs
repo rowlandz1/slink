@@ -1,13 +1,14 @@
 mod parser;
 mod exec;
 mod ast;
+mod internals;
 
 extern crate pest;
 #[macro_use]
 extern crate pest_derive;
 
-use std::io::{stdin};
-use pest::{error::Error, iterators::Pair};
+use std::io::stdin;
+use pest::iterators::Pair;
 use pest::Parser;
 
 #[derive(Parser)]

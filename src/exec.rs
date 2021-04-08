@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use core::ops;
 use crate::ast::{AstStmt, AstExpr, SciVal};
 use SciVal::*;
+use crate::internals;
 
 impl ops::Add<SciVal> for SciVal {
     type Output = SciVal;
@@ -67,7 +68,7 @@ impl ops::Mul<SciVal> for SciVal {
 }
 
 impl SciVal {
-    fn fun_app(self, args: Vec<SciVal>) -> SciVal {
+    fn fun_app(self, mut args: Vec<SciVal>) -> SciVal {
         match self {
             Closure(mut env, mut params, expr) => {
                 if params.len() < args.len() {
@@ -93,7 +94,11 @@ impl SciVal {
                 let inter_result = cls1.fun_app(args);
                 cls2.fun_app(vec![inter_result])
             }
-            _ => panic!("Cannot apply arguments to a non-closure value"),
+            Internal(s, mut a) => {
+                args.append(&mut a);
+                internals::apply_to_internal(&s, args).unwrap()
+            }
+            _ => panic!("Cannot apply arguments to this object"),
         }
     }
 }
@@ -179,10 +184,12 @@ impl Environ {
             }
             AstExpr::Num(n) => Number(n),
             AstExpr::Id(x) => {
-                let val = self.var_store.get(&x).expect("Error, x not defined");
-                val.to_owned()
+                if let Some(v) = self.var_store.get(&x) {
+                    v.clone()
+                } else {
+                    Internal(x, Vec::new())
+                }
             }
-            AstExpr::Val(v) => v,
         }
     }
 }

@@ -107,7 +107,8 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
             Let(bindings, Box::new(inner_expr))
         }
-        Rule::ID => {
+        Rule::ID |
+        Rule::OPID => {
             Id(expr.as_str().to_string())
         }
         Rule::NUM => {

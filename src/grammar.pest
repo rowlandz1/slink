@@ -3,6 +3,7 @@ digit = _{ '0'..'9' }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
 ID     = @{ alpha ~ (alpha | digit)* }
+OPID   = @{ "op" ~ ("+" | "-" | "*" | "/" | ".")+ }
 NUM    = @{ digit+ ~ ("." ~ digit+)? }
 BINOP0 = @{ "+" | "-" }
 BINOP1 = @{ "*" | "/" }
@@ -38,6 +39,7 @@ param_list = { ID+ }
 
 fun_app = {
     ID ~ "(" ~ arg_list ~ ")"
+  | OPID ~ "(" ~ arg_list ~ ")"
   | "(" ~ expr ~ ")" ~ "(" ~ arg_list ~ ")"
 }
 arg_list = { expr ~ ("," ~ expr)* }

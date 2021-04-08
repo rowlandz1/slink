@@ -1,29 +1,7 @@
 use std::collections::HashMap;
 use core::ops;
-use crate::parser::{AstStmt, AstExpr};
-
-#[derive(Debug)]
-pub enum SciVal {
-    Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
-    Number(f64),
-    Closure(Environ, Vec<String>, AstExpr),
-}
-
+use crate::ast::{AstStmt, AstExpr, SciVal};
 use SciVal::*;
-
-impl ToOwned for SciVal {
-    type Owned = SciVal;
-
-    fn to_owned(&self) -> SciVal {
-        match self {
-            Matrix(r, c, v) => {
-                Matrix(*r, *c, v.to_vec())
-            }
-            Number(n) => Number(*n),
-            Closure(env, params, inner_expr) => Closure(env.to_owned(), params.to_vec(), inner_expr.to_owned()),
-        }
-    }
-}
 
 impl ops::Add<SciVal> for SciVal {
     type Output = SciVal;
@@ -48,8 +26,7 @@ impl ops::Add<SciVal> for SciVal {
                 Matrix(r, c, ret)
             }
             (Number(n1), Number(n2)) => Number(n1 + n2),
-            (Closure(_,_,_), _) |
-            (_, Closure(_,_,_)) => panic!("Error, addition is not defined for closures"),
+            _ => panic!("Error, addition is not defined for this type"),
         }
     }
 }
@@ -84,8 +61,39 @@ impl ops::Mul<SciVal> for SciVal {
                 Matrix(r, c, ret)
             }
             (Number(n1), Number(n2)) => Number(n1 * n2),
-            (Closure(_,_,_), _) |
-            (_, Closure(_,_,_)) => panic!("Error, multiplication is not defined for closures"),
+            _ => panic!("Error, multiplication is not defined for this type"),
+        }
+    }
+}
+
+impl SciVal {
+    fn fun_app(self, args: Vec<SciVal>) -> SciVal {
+        match self {
+            Closure(mut env, mut params, expr) => {
+                if params.len() < args.len() {
+                    panic!("Error: arity mismatch. Too many arguments supplied.");
+                }
+                // full argument application
+                else if params.len() == args.len() {
+                    for (param, arg) in params.iter().zip(args) {
+                        env.insert(param.to_owned(), arg);
+                    }
+                    Environ::from_map(env).evaluate(*expr)
+                }
+                // partial application
+                else {
+                    let params2 = params.split_off(params.len() - args.len());
+                    for (param, arg) in params2.iter().zip(args) {
+                        env.insert(param.to_owned(), arg);
+                    }
+                    Closure(env, params, expr)
+                }
+            }
+            Comclos(cls1, cls2) => {
+                let inter_result = cls1.fun_app(args);
+                cls2.fun_app(vec![inter_result])
+            }
+            _ => panic!("Cannot apply arguments to a non-closure value"),
         }
     }
 }
@@ -112,6 +120,10 @@ impl Environ {
         Environ {var_store: HashMap::new()}
     }
 
+    pub fn from_map(m: HashMap<String, SciVal>) -> Environ {
+        Environ {var_store: m}
+    }
+
     pub fn execute(&mut self, stmt: AstStmt) {
         match stmt {
             AstStmt::Assign(v, e) => {
@@ -134,13 +146,10 @@ impl Environ {
                 else if op.eq("-") { lhs + (Number(-1f64) * rhs) }
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq(".") {
-                    if let (Closure(e1, p1, b1), Closure(e2, p2, b2)) = (lhs, rhs) {
-                        if p2.len() != 1 {
-                            panic!("Error, second function in function composition must take 1 argument");
-                        }
-                        todo!();
-
-                    } else { panic!("Error, function composition is not defined for non-closure types") }
+                    match lhs {
+                        Closure(_,_,_) | Comclos(_,_) => Comclos(Box::new(lhs), Box::new(rhs)),
+                        _ => rhs.fun_app(vec![lhs]),
+                    }
                 }
                 else { panic!("Unrecognized binary operator"); }
             }
@@ -154,7 +163,7 @@ impl Environ {
                 Matrix(r, c, vret)
             }
             AstExpr::Lambda(params, inner_expr) => {
-                Closure(self.to_owned(), params, *inner_expr)
+                Closure(self.to_owned().var_store, params, inner_expr)
             }
             AstExpr::Let(bindings, inner_expr) => {
                 for (v, e) in bindings {
@@ -164,32 +173,16 @@ impl Environ {
                 self.evaluate(*inner_expr)
             }
             AstExpr::FunApp(f, args) => {
-                if let Closure(mut env, mut params, inner_expr) = self.evaluate(*f) {
-                    if params.len() < args.len() {
-                        panic!("Error: arity mismatch. Too many arguments supplied.");
-                    }
-                    // full argument application
-                    else if params.len() == args.len() {
-                        for (param, arg) in params.iter().zip(args) {
-                            env.var_store.insert(param.to_owned(), self.evaluate(arg));
-                        }
-                        env.evaluate(inner_expr)
-                    }
-                    // partial application
-                    else {
-                        let params2 = params.split_off(params.len() - args.len());
-                        for (param, arg) in params2.iter().zip(args) {
-                            env.var_store.insert(param.to_owned(), self.evaluate(arg));
-                        }
-                        Closure(env, params, inner_expr)
-                    }
-                } else { panic!("Error, cannot apply arguments to a non-closure value") }
+                let f = self.evaluate(*f);
+                let args_evaled = args.into_iter().map(|x| self.evaluate(x)).collect();
+                f.fun_app(args_evaled)
             }
             AstExpr::Num(n) => Number(n),
             AstExpr::Id(x) => {
                 let val = self.var_store.get(&x).expect("Error, x not defined");
                 val.to_owned()
             }
+            AstExpr::Val(v) => v,
         }
     }
 }

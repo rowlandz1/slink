@@ -2,61 +2,8 @@ use crate::Rule;
 //use std::result::Result;
 //use pest::error::Error;
 use pest::iterators::Pair;
-
-use AstStmt::*;
-use AstExpr::*;
-
-#[derive(Debug)]
-pub enum AstStmt {
-    Assign(String, Box<AstExpr>),
-    Display(Box<AstExpr>),
-}
-
-#[derive(Debug)]
-pub enum AstExpr {
-    Binop(String, Box<AstExpr>, Box<AstExpr>),
-    Lambda(Vec<String>, Box<AstExpr>),
-    FunApp(Box<AstExpr>, Vec<AstExpr>),
-    Let(Vec<(String, AstExpr)>, Box<AstExpr>),
-    Matrix(usize, usize, Vec<AstExpr>),
-    Num(f64),
-    Id(String),
-}
-
-impl ToOwned for AstExpr {
-    type Owned = AstExpr;
-
-    fn to_owned(&self) -> AstExpr {
-        match self {
-            Binop(op, lhs, rhs) => Binop(op.to_owned(), Box::new((*lhs).to_owned()), Box::new((*rhs).to_owned())),
-            Lambda(params, inner_expr) => Lambda(params.to_vec(), Box::new((*inner_expr).to_owned())),
-            FunApp(f, args) => {
-                let mut newargs: Vec<AstExpr> = vec![];
-                for i in 0..args.len() {
-                    newargs.push(args[i].to_owned());
-                }
-                FunApp(Box::new((*f).to_owned()), newargs)
-            }
-            Let(bindings, e) => {
-                let mut newbindings: Vec<(String, AstExpr)> = vec![];
-                for i in 0..bindings.len() {
-                    let (v, e1) = &bindings[i];
-                    newbindings.push((v.to_owned(), e1.to_owned()));
-                }
-                Let(newbindings, Box::new((*e).to_owned()))
-            }
-            Matrix(r, c, v) => {
-                let mut newv: Vec<AstExpr> = vec![];
-                for i in 0..v.len() {
-                    newv.push(v[i].to_owned());
-                }
-                Matrix(*r, *c, newv)
-            }
-            Num(n) => Num(*n),
-            Id(x) => Id(x.to_owned()),
-        }
-    }
-}
+use crate::ast::{AstStmt, AstExpr};
+use {AstStmt::*, AstExpr::*};
 
 pub fn get_ast_stmt(stmt: Pair<Rule>) -> AstStmt {
     match stmt.as_rule() {

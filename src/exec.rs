@@ -1,3 +1,9 @@
+/* exec.rs
+ *
+ * Implements operations for SciValue,
+ * Defines Environs and implements execute and evaluate operations for them.
+ */
+
 use std::collections::HashMap;
 use core::ops;
 use crate::ast::{AstStmt, AstExpr, SciVal};
@@ -108,15 +114,9 @@ pub struct Environ {
     var_store: HashMap<String, SciVal>,
 }
 
-impl ToOwned for Environ {
-    type Owned = Environ;
-
-    fn to_owned(&self) -> Environ {
-        let mut new_environ = Environ::new();
-        for (key, val) in self.var_store.iter() {
-            new_environ.var_store.insert(key.to_owned(), val.to_owned());
-        }
-        new_environ
+impl Clone for Environ {
+    fn clone(&self) -> Environ {
+        Environ::from_map(self.var_store.clone())
     }
 }
 

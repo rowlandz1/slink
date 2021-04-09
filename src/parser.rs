@@ -1,6 +1,11 @@
+/* parser.rs
+ *
+ * Converts Pest abstract syntax into the abstract structures defined in ast.rs
+ * get_ast_stmt: parses into a AstStmt
+ * get_ast_expr: parses into a AstExpr
+ */
+
 use crate::Rule;
-//use std::result::Result;
-//use pest::error::Error;
 use pest::iterators::Pair;
 use crate::ast::{AstStmt, AstExpr};
 use {AstStmt::*, AstExpr::*};

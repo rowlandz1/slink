@@ -1,3 +1,8 @@
+/* ast.rs
+ *
+ * Contains definitions of abstract statements, expressions, and values
+ */
+
 use std::collections::HashMap;
 
 #[derive(Debug)]

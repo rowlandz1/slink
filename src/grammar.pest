@@ -8,6 +8,7 @@ NUM    = @{ digit+ ~ ("." ~ digit+)? }
 BINOP0 = @{ "+" | "-" }
 BINOP1 = @{ "*" | "/" }
 BINOP2 = @{ "." }
+QUEST  = @{ "?" }
 
 stmt = {
     stmt_assign
@@ -42,7 +43,11 @@ fun_app = {
   | OPID ~ "(" ~ arg_list ~ ")"
   | "(" ~ expr ~ ")" ~ "(" ~ arg_list ~ ")"
 }
-arg_list = { (expr ~ ("," ~ expr)*)? }
+arg_list = { (arg ~ ("," ~ arg)*)? }
+arg = {
+    QUEST
+  | expr
+}
 
 let_expr = { "let" ~ var_bindings ~ "in" ~ expr }
 var_bindings = { ID ~ "=" ~ expr ~ ("," ~ ID ~ "=" ~ expr)* }

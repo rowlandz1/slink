@@ -7,7 +7,7 @@
 
 use crate::Rule;
 use pest::iterators::Pair;
-use crate::ast::{AstStmt, AstExpr};
+use crate::ast::*;
 use {AstStmt::*, AstExpr::*};
 
 pub fn get_ast_stmt(stmt: Pair<Rule>) -> AstStmt {
@@ -90,11 +90,16 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             Lambda(param_vec, Box::new(inner_expr))
         }
         Rule::fun_app => {
-            let mut arg_vec: Vec<AstExpr> = vec![];
+            let mut arg_vec: Vec<AstArg> = vec![];
             let mut inner_rules = expr.into_inner();
             let f = get_ast_expr(inner_rules.next().unwrap());
-            for pair in inner_rules.next().unwrap().into_inner() {
-                arg_vec.push(get_ast_expr(pair));
+            for arg in inner_rules.next().unwrap().into_inner() {
+                let a = arg.into_inner().next().unwrap();
+                match a.as_rule() {
+                    Rule::QUEST => arg_vec.push(AstArg::Question),
+                    Rule::expr => arg_vec.push(AstArg::Expr(Box::new(get_ast_expr(a)))),
+                    _ => unreachable!()
+                }
             }
             FunApp(Box::new(f), arg_vec)
         }

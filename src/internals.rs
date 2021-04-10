@@ -3,25 +3,40 @@
  * Evaluates internal functions
  */
 
+use std::collections::HashMap;
 use crate::ast::SciVal;
 use SciVal::*;
 
-pub fn apply_to_internal(intfun: &String, mut args: Vec<SciVal>) -> Result<SciVal, &str> {
+pub fn get_internal(name: String) -> SciVal {
+    let env = HashMap::new();
+    if name.eq("index") { Internal(env, vec![0, 1, 2], name) }
+    else if name.eq("det")
+         || name.eq("inv")
+         || name.eq("transpose")
+         || name.eq("eye")
+         || name.eq("sqrt")
+         { Internal(env, vec![0], name) }
+    else if name.eq("op+")
+         || name.eq("op-")
+         { Internal(env, vec![0, 1], name) }
+    else { panic!("Error, unknown internal function"); }
+}
+
+pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> Result<SciVal, &str> {
     if intfun.eq("index") {
-        if args.len() < 3 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 3 { return Err("Arity mismatch on function 'index'"); }
+        if args.len() != 3 { return Err("Arity mismatch on function 'index'"); }
 
         let mut mshape: (usize, usize) = (0,0);
         let mut index: (usize, usize) = (0,0);
         let mut vals: Vec<f64> = vec![];
 
-        if let Number(n) = args.pop().unwrap() {
+        if let Number(n) = args.remove(&2).unwrap() {
             index.1 = n.round() as usize;
         }
-        if let Number(n) = args.pop().unwrap() {
+        if let Number(n) = args.remove(&1).unwrap() {
             index.0 = n.round() as usize;
         }
-        if let Matrix(r, c, v) = args.pop().unwrap() {
+        if let Matrix(r, c, v) = args.remove(&0).unwrap() {
             mshape = (r, c);
             vals = v;
         } else { return Err("First arg must be matrix"); }
@@ -31,28 +46,25 @@ pub fn apply_to_internal(intfun: &String, mut args: Vec<SciVal>) -> Result<SciVa
         }
         Ok(Number(vals[index.0 * mshape.1 + index.1]))
     } else if intfun.eq("det") {
-        if args.len() < 1 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 1 { return Err("Arity mismatch on function 'det'"); }
+        if args.len() != 1 { return Err("Arity mismatch on function 'det'"); }
 
-        if let Matrix(r, c, v) = args.pop().unwrap() {
+        if let Matrix(r, c, v) = args.remove(&0).unwrap() {
             if r != c { return Err("Error, determinant of a non-square matrix is undefined."); }
             Ok(Number(matrix_det(r, &v)))
         } else { return Err("Error, determinant only defined for matrices.") }
     } else if intfun.eq("inv") {
-        if args.len() < 1 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 1 { return Err("Arity mismatch on function 'inv'"); }
+        if args.len() != 1 { return Err("Arity mismatch on function 'inv'"); }
 
-        if let Matrix(r, c, mut v) = args.pop().unwrap() {
+        if let Matrix(r, c, mut v) = args.remove(&0).unwrap() {
             if r != c { return Err("Error, inverse of a non-square matrix is undefined."); }
             if matrix_det(r, &v) == 0f64 { return Err("Error, matrix is not invertible"); }
             let ret = matrix_inv(r, &mut v);
             Ok(Matrix(r, c, ret))
         } else { Err("Error, inverse only defined for matrices") }
     } else if intfun.eq("transpose") {
-        if args.len() < 1 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 1 { return Err("Arity mismatch on function 'transpose'"); }
+        if args.len() != 1 { return Err("Arity mismatch on function 'transpose'"); }
 
-        if let Matrix(r, c, v) = args.pop().unwrap() {
+        if let Matrix(r, c, v) = args.remove(&0).unwrap() {
             let mut newv: Vec<f64> = vec![];
             for j in 0..c {
                 for i in 0..r {
@@ -62,10 +74,9 @@ pub fn apply_to_internal(intfun: &String, mut args: Vec<SciVal>) -> Result<SciVa
             Ok(Matrix(c, r, newv))
         } else { return Err("Error, transpose only defined for matrices"); }
     } else if intfun.eq("eye") {
-        if args.len() < 1 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 1 { return Err("Arity mismatch on function 'eye'"); }
+        if args.len() != 1 { return Err("Arity mismatch on function 'eye'"); }
 
-        if let Number(n) = args.pop().unwrap() {
+        if let Number(n) = args.remove(&0).unwrap() {
             if n.round() < 1f64 { return Err("Error, argument to eye must be >= 1"); }
             let n = n.round() as usize;
             let mut v = vec![0f64; n*n];
@@ -77,21 +88,25 @@ pub fn apply_to_internal(intfun: &String, mut args: Vec<SciVal>) -> Result<SciVa
             Ok(Matrix(n, n, v))
         } else { return Err("Error, eye accepts a number"); }
     } else if intfun.eq("sqrt") {
-        if args.len() < 1 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 1 { return Err("Arity mismatch on function 'sqrt'"); }
+        if args.len() != 1 { return Err("Arity mismatch on function 'sqrt'"); }
 
-        if let Number(n) = args.pop().unwrap() {
+        if let Number(n) = args.remove(&0).unwrap() {
             if n < 0f64 { return Err("Error, sqrt id undefined for negative numbers") }
 
             Ok(Number(n.sqrt()))
         } else { return Err("Error, sqrt accepts a number"); }
     } else if intfun.eq("op+") {
-        if args.len() < 2 { return Ok(Internal(intfun.clone(), args)); }
-        if args.len() > 2 { return Err("Arity mismatch on function 'op+'"); }
+        if args.len() != 2 { return Err("Arity mismatch on function 'op+'"); }
 
-        let rhs = args.pop().unwrap();
-        let lhs = args.pop().unwrap();
+        let rhs = args.remove(&1).unwrap();
+        let lhs = args.remove(&0).unwrap();
         Ok(lhs + rhs)
+    } else if intfun.eq("op-") {
+        if args.len() != 2 { return Err("Arity mismatch on function 'op-'"); }
+
+        let rhs = args.remove(&1).unwrap();
+        let lhs = args.remove(&0).unwrap();
+        Ok(lhs + (Number(-1f64) * rhs))
     }
     else { Err("Function not recognized") }
 }

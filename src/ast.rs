@@ -15,7 +15,7 @@ pub enum AstStmt {
 pub enum AstExpr {
     Binop(String, Box<AstExpr>, Box<AstExpr>),
     Lambda(Vec<String>, Box<AstExpr>),
-    FunApp(Box<AstExpr>, Vec<AstExpr>),
+    FunApp(Box<AstExpr>, Vec<AstArg>),
     Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     Num(f64),
@@ -23,12 +23,23 @@ pub enum AstExpr {
 }
 
 #[derive(Debug)]
+pub enum AstArg {
+    Question,
+    Expr(Box<AstExpr>),
+}
+
+#[derive(Debug)]
 pub enum SciVal {
     Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
     Number(f64),
-    Closure(HashMap<String, SciVal>, Vec<String>, Box<AstExpr>),
+    Closure(HashMap<String, SciVal>, Vec<String>, Box<AstExpr>),  // env, params, expr
     Comclos(Box<SciVal>, Box<SciVal>),
-    Internal(String, Vec<SciVal>),
+    Internal(HashMap<usize, SciVal>, Vec<usize>, String),      // env, params, name
+}
+
+pub enum Arg {
+    Question,
+    Val(Box<SciVal>),
 }
 
 impl Clone for AstExpr {
@@ -45,6 +56,15 @@ impl Clone for AstExpr {
     }
 }
 
+impl Clone for AstArg {
+    fn clone(&self) -> AstArg {
+        match self {
+            AstArg::Question => AstArg::Question,
+            AstArg::Expr(e) => AstArg::Expr(e.clone()),
+        }
+    }
+}
+
 impl Clone for SciVal {
     fn clone(&self) -> SciVal {
         match self {
@@ -54,7 +74,7 @@ impl Clone for SciVal {
                 SciVal::Closure(env.clone(), params.to_vec(), inner_expr.clone())
             }
             SciVal::Comclos(cls1, cls2) => SciVal::Comclos(cls1.clone(), cls2.clone()),
-            SciVal::Internal(s, p) => SciVal::Internal(s.clone(), p.to_vec()),
+            SciVal::Internal(env, params, name) => SciVal::Internal(env.clone(), params.clone(), name.clone()),
         }
     }
 }

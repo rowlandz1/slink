@@ -27,7 +27,7 @@ impl ToString for SciVal {
             SciVal::Number(n) => n.to_string(),
             SciVal::Closure(_, _, _) =>  String::from("<function object>"),
             SciVal::Comclos(_, _) =>  String::from("<function object>"),
-            SciVal::Internal(v, _) =>  format!("<internal '{}'>", v),
+            SciVal::Internal(_,_,name) =>  format!("<internal '{}'>", name),
         }
     }
 }

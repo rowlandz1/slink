@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use core::ops;
-use crate::ast::{AstStmt, AstExpr, SciVal};
+use crate::ast::*;
 use SciVal::*;
 use crate::internals;
 
@@ -74,35 +74,45 @@ impl ops::Mul<SciVal> for SciVal {
 }
 
 impl SciVal {
-    fn fun_app(self, mut args: Vec<SciVal>) -> SciVal {
+    fn fun_app(self, args: Vec<Arg>) -> SciVal {
         match self {
             Closure(mut env, mut params, expr) => {
                 if params.len() < args.len() {
                     panic!("Error: arity mismatch. Too many arguments supplied.");
                 }
-                // full argument application
-                else if params.len() == args.len() {
-                    for (param, arg) in params.iter().zip(args) {
-                        env.insert(param.to_owned(), arg);
+                let appliedparams = params.split_off(params.len() - args.len());
+                for (param, arg) in appliedparams.iter().zip(args) {
+                    match arg {
+                        Arg::Question => { params.push(param.clone()); }
+                        Arg::Val(arg) => { env.insert(param.clone(), *arg.clone()); }
                     }
-                    Environ::from_map(env).evaluate(*expr)
                 }
-                // partial application
-                else {
-                    let params2 = params.split_off(params.len() - args.len());
-                    for (param, arg) in params2.iter().zip(args) {
-                        env.insert(param.to_owned(), arg);
-                    }
+                if params.len() == 0 {
+                    Environ::from_map(env).evaluate(*expr)
+                } else {
                     Closure(env, params, expr)
                 }
             }
             Comclos(cls1, cls2) => {
                 let inter_result = cls1.fun_app(args);
-                cls2.fun_app(vec![inter_result])
+                cls2.fun_app(vec![Arg::Val(Box::new(inter_result))])
             }
-            Internal(s, mut a) => {
-                args.append(&mut a);
-                internals::apply_to_internal(&s, args).unwrap()
+            Internal(mut env, mut params, name) => {
+                if params.len() < args.len() {
+                    panic!("Error: arity mismatch. Too many arguments supplied.");
+                }
+                let appliedparams = params.split_off(params.len() - args.len());
+                for (param, arg) in appliedparams.iter().zip(args) {
+                    match arg {
+                        Arg::Question => { params.push(param.clone()); }
+                        Arg::Val(arg) => { env.insert(param.clone(), *arg.clone()); }
+                    }
+                }
+                if params.len() == 0 {
+                    internals::apply_to_internal(&name, env).unwrap()
+                } else {
+                    Internal(env, params, name)
+                }
             }
             _ => panic!("Cannot apply arguments to this object"),
         }
@@ -153,7 +163,7 @@ impl Environ {
                 else if op.eq(".") {
                     match lhs {
                         Closure(_,_,_) | Comclos(_,_) => Comclos(Box::new(lhs), Box::new(rhs)),
-                        _ => rhs.fun_app(vec![lhs]),
+                        _ => rhs.fun_app(vec![Arg::Val(Box::new(lhs))]),
                     }
                 }
                 else { panic!("Unrecognized binary operator"); }
@@ -179,7 +189,13 @@ impl Environ {
             }
             AstExpr::FunApp(f, args) => {
                 let f = self.evaluate(*f);
-                let args_evaled = args.into_iter().map(|x| self.evaluate(x)).collect();
+                let evalarg = |x| {
+                    match x {
+                        AstArg::Question => Arg::Question,
+                        AstArg::Expr(e) => Arg::Val(Box::new(self.evaluate(*e))),
+                    }
+                };
+                let args_evaled = args.into_iter().map(evalarg).collect();
                 f.fun_app(args_evaled)
             }
             AstExpr::Num(n) => Number(n),
@@ -187,7 +203,7 @@ impl Environ {
                 if let Some(v) = self.var_store.get(&x) {
                     v.clone()
                 } else {
-                    Internal(x, Vec::new())
+                    internals::get_internal(x)
                 }
             }
         }

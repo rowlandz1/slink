@@ -76,6 +76,15 @@ pub fn apply_to_internal(intfun: &String, mut args: Vec<SciVal>) -> Result<SciVa
             }
             Ok(Matrix(n, n, v))
         } else { return Err("Error, eye accepts a number"); }
+    } else if intfun.eq("sqrt") {
+        if args.len() < 1 { return Ok(Internal(intfun.clone(), args)); }
+        if args.len() > 1 { return Err("Arity mismatch on function 'sqrt'"); }
+
+        if let Number(n) = args.pop().unwrap() {
+            if n < 0f64 { return Err("Error, sqrt id undefined for negative numbers") }
+
+            Ok(Number(n.sqrt()))
+        } else { return Err("Error, sqrt accepts a number"); }
     } else if intfun.eq("op+") {
         if args.len() < 2 { return Ok(Internal(intfun.clone(), args)); }
         if args.len() > 2 { return Err("Arity mismatch on function 'op+'"); }

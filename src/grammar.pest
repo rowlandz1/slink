@@ -42,7 +42,7 @@ fun_app = {
   | OPID ~ "(" ~ arg_list ~ ")"
   | "(" ~ expr ~ ")" ~ "(" ~ arg_list ~ ")"
 }
-arg_list = { expr ~ ("," ~ expr)* }
+arg_list = { (expr ~ ("," ~ expr)*)? }
 
 let_expr = { "let" ~ var_bindings ~ "in" ~ expr }
 var_bindings = { ID ~ "=" ~ expr ~ ("," ~ ID ~ "=" ~ expr)* }

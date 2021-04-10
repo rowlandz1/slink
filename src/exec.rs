@@ -137,7 +137,7 @@ impl Environ {
             }
             AstStmt::Display(e) => {
                 let evaled = self.evaluate(*e);
-                println!("{:?}", evaled);
+                println!("{}", evaled.to_string());
             }
         }
     }

@@ -8,6 +8,7 @@ use crate::ast::*;
 impl ToString for SciVal {
     fn to_string(&self) -> String {
         match self {
+            SciVal::Number(n) => n.to_string(),
             SciVal::Matrix(_, c, v) => {
                 let mut vs: Vec<String> = vec![];
                 let mut elemlen = 1;
@@ -24,7 +25,10 @@ impl ToString for SciVal {
                 }
                 ret
             }
-            SciVal::Number(n) => n.to_string(),
+            SciVal::List(v) => {
+                let vstrings: Vec<String> = v.iter().map(|x| x.to_string()).collect();
+                format!("[ {} ]", vstrings.join(", "))
+            }
             SciVal::Closure(_, _, _) =>  String::from("<function object>"),
             SciVal::Comclos(_, _) =>  String::from("<function object>"),
             SciVal::Internal(_,_,name) =>  format!("<internal '{}'>", name),

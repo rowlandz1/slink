@@ -33,6 +33,10 @@ impl ops::Add<SciVal> for SciVal {
                 Matrix(r, c, ret)
             }
             (Number(n1), Number(n2)) => Number(n1 + n2),
+            (List(mut v1), List(mut v2)) => {
+                v1.append(&mut v2);
+                List(v1)
+            }
             _ => panic!("Error, addition is not defined for this type"),
         }
     }
@@ -68,13 +72,23 @@ impl ops::Mul<SciVal> for SciVal {
                 Matrix(r, c, ret)
             }
             (Number(n1), Number(n2)) => Number(n1 * n2),
+            (List(v), Number(n)) => {
+                if n < 0f64 { panic!("Error, cannot repeat a list a negative number of times"); }
+                if n.round() != n { panic!("Error, cannot repeat a list a fractional number of times"); }
+                let n = n.round() as usize;
+                let mut vret: Vec<SciVal> = Vec::new();
+                for _ in 0..n {
+                    vret.append(&mut v.to_vec());
+                }
+                List(vret)
+            }
             _ => panic!("Error, multiplication is not defined for this type"),
         }
     }
 }
 
 impl SciVal {
-    fn fun_app(self, args: Vec<Arg>) -> SciVal {
+    pub fn fun_app(self, args: Vec<Arg>) -> SciVal {
         match self {
             Closure(mut env, mut params, expr) => {
                 if params.len() < args.len() {
@@ -176,6 +190,10 @@ impl Environ {
                     } else { panic!("Error! Non-numerical value in a matrix"); }
                 }
                 Matrix(r, c, vret)
+            }
+            AstExpr::List(v) => {
+                let newv = v.into_iter().map(|x| self.evaluate(x)).collect();
+                List(newv)
             }
             AstExpr::Lambda(params, inner_expr) => {
                 Closure(self.to_owned().var_store, params, inner_expr)

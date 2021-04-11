@@ -80,6 +80,13 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             Matrix(numrows, numcols, firstrow)
         }
+        Rule::list => {
+            let mut v: Vec<AstExpr> = Vec::new();
+            for elem in expr.into_inner() {
+                v.push(get_ast_expr(elem));
+            }
+            List(v)
+        }
         Rule::lam_expr => {
             let mut param_vec: Vec<String> = vec![];
             let mut inner_rules = expr.into_inner();

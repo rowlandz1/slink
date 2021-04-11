@@ -24,6 +24,7 @@ expr3 = { expr_base }
 
 expr_base = {
     matrix
+  | list
   | lam_expr
   | fun_app
   | let_expr
@@ -34,6 +35,8 @@ expr_base = {
 
 matrix = { mat_row+ }
 mat_row = { "{" ~ expr+ ~ "}" }
+
+list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
 
 lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
 param_list = { ID+ }

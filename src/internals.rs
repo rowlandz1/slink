@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use crate::ast::SciVal;
+use crate::ast::Arg;
 use SciVal::*;
 
 pub fn get_internal(name: String) -> SciVal {
@@ -15,9 +16,12 @@ pub fn get_internal(name: String) -> SciVal {
          || name.eq("transpose")
          || name.eq("eye")
          || name.eq("sqrt")
+         || name.eq("len")
          { Internal(env, vec![0], name) }
     else if name.eq("op+")
          || name.eq("op-")
+         || name.eq("op*")
+         || name.eq("map")
          { Internal(env, vec![0, 1], name) }
     else { panic!("Error, unknown internal function"); }
 }
@@ -91,10 +95,25 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
         if args.len() != 1 { return Err("Arity mismatch on function 'sqrt'"); }
 
         if let Number(n) = args.remove(&0).unwrap() {
-            if n < 0f64 { return Err("Error, sqrt id undefined for negative numbers") }
+            if n < 0f64 { return Err("Error, sqrt is undefined for negative numbers") }
 
             Ok(Number(n.sqrt()))
         } else { return Err("Error, sqrt accepts a number"); }
+    } else if intfun.eq("len") {
+        if args.len() != 1 { return Err("Arity mismatch on function 'len'"); }
+
+        if let List(v) = args.remove(&0).unwrap() {
+            Ok(Number(v.len() as f64))
+        } else { return Err("Error, len is undefined for non-list values"); }
+    } else if intfun.eq("map") {
+        if args.len() != 2 { return Err("Arity mismatch on function 'map'"); }
+
+        let arg1 = args.remove(&1).unwrap();
+        let arg0 = args.remove(&0).unwrap();
+        if let List(v) = arg0 {
+            let mappedv = v.into_iter().map(|x| arg1.clone().fun_app(vec![Arg::Val(Box::new(x))])).collect();
+            Ok(List(mappedv))
+        } else { panic!("Error, first argument to map must be a list"); }
     } else if intfun.eq("op+") {
         if args.len() != 2 { return Err("Arity mismatch on function 'op+'"); }
 
@@ -107,6 +126,12 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
         let rhs = args.remove(&1).unwrap();
         let lhs = args.remove(&0).unwrap();
         Ok(lhs + (Number(-1f64) * rhs))
+    } else if intfun.eq("op*") {
+        if args.len() != 2 { return Err("Arity mismatch on function 'op*'"); }
+
+        let rhs = args.remove(&1).unwrap();
+        let lhs = args.remove(&0).unwrap();
+        Ok(lhs * rhs)
     }
     else { Err("Function not recognized") }
 }

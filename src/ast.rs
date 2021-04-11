@@ -18,6 +18,7 @@ pub enum AstExpr {
     FunApp(Box<AstExpr>, Vec<AstArg>),
     Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
+    List(Vec<AstExpr>),
     Num(f64),
     Id(String),
 }
@@ -30,8 +31,9 @@ pub enum AstArg {
 
 #[derive(Debug)]
 pub enum SciVal {
-    Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
     Number(f64),
+    Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
+    List(Vec<SciVal>),
     Closure(HashMap<String, SciVal>, Vec<String>, Box<AstExpr>),  // env, params, expr
     Comclos(Box<SciVal>, Box<SciVal>),
     Internal(HashMap<usize, SciVal>, Vec<usize>, String),      // env, params, name
@@ -50,6 +52,7 @@ impl Clone for AstExpr {
             AstExpr::FunApp(f, args) => AstExpr::FunApp(f.clone(), args.to_vec()),
             AstExpr::Let(bindings, e) => AstExpr::Let(bindings.clone(), e.clone()),
             AstExpr::Matrix(r, c, v) => AstExpr::Matrix(*r, *c, v.to_vec()),
+            AstExpr::List(v) => AstExpr::List(v.to_vec()),
             AstExpr::Num(n) => AstExpr::Num(*n),
             AstExpr::Id(x) => AstExpr::Id(x.clone()),
         }
@@ -68,8 +71,9 @@ impl Clone for AstArg {
 impl Clone for SciVal {
     fn clone(&self) -> SciVal {
         match self {
-            SciVal::Matrix(r, c, v) => SciVal::Matrix(*r, *c, v.to_vec()),
             SciVal::Number(n) => SciVal::Number(*n),
+            SciVal::Matrix(r, c, v) => SciVal::Matrix(*r, *c, v.to_vec()),
+            SciVal::List(v) => SciVal::List(v.to_vec()),
             SciVal::Closure(env, params, inner_expr) => {
                 SciVal::Closure(env.clone(), params.to_vec(), inner_expr.clone())
             }

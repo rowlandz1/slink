@@ -26,6 +26,7 @@ pub fn get_internal(name: String) -> SciVal {
     || name.eq("op-")
     || name.eq("op*")
     || name.eq("map")
+    || name.eq("range")
     { return Closure(env, params, Err(name), None); }
 
     params.push(String::from("2"));
@@ -123,6 +124,23 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
             let mappedv = v.into_iter().map(|x| arg1.clone().fun_app(vec![Arg::Val(Box::new(x))])).collect();
             Ok(List(mappedv))
         } else { panic!("Error, first argument to map must be a list"); }
+    } else if intfun.eq("range") {
+        if args.len() != 2 { return Err("Arity mismatch on function 'range'"); }
+
+        let arg1 = args.remove("1").unwrap();
+        let arg0 = args.remove("0").unwrap();
+        if let (Number(arg0), Number(arg1)) = (arg0, arg1) {
+            if arg0.round() != arg0 { return Err("Error, value must be an integer"); }
+            if arg1.round() != arg1 { return Err("Error, value must be an integer"); }
+            let arg0 = arg0 as usize;
+            let arg1 = arg1 as usize;
+            if arg0 >= arg1 { return Ok(List(vec![])); }
+            let mut retv: Vec<SciVal> = Vec::new();
+            for n in arg0..arg1 {
+                retv.push(Number(n as f64));
+            }
+            return Ok(List(retv));
+        } else { return Err("Error, range is not defined for non-integer values"); }
     } else if intfun.eq("op+") {
         if args.len() != 2 { return Err("Arity mismatch on function 'op+'"); }
 

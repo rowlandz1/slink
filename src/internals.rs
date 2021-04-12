@@ -10,23 +10,32 @@ use SciVal::*;
 
 pub fn get_internal(name: String) -> SciVal {
     let env = HashMap::new();
-    if name.eq("index") { Internal(env, vec![0, 1, 2], name) }
-    else if name.eq("det")
-         || name.eq("inv")
-         || name.eq("transpose")
-         || name.eq("eye")
-         || name.eq("sqrt")
-         || name.eq("len")
-         { Internal(env, vec![0], name) }
-    else if name.eq("op+")
-         || name.eq("op-")
-         || name.eq("op*")
-         || name.eq("map")
-         { Internal(env, vec![0, 1], name) }
-    else { panic!("Error, unknown internal function"); }
+    let mut params: Vec<String> = Vec::new();
+
+    params.push(String::from("0"));
+    if name.eq("det")
+    || name.eq("inv")
+    || name.eq("transpose")
+    || name.eq("eye")
+    || name.eq("sqrt")
+    || name.eq("len")
+    { return Closure(env, params, Err(name)); }
+
+    params.push(String::from("1"));
+    if name.eq("op+")
+    || name.eq("op-")
+    || name.eq("op*")
+    || name.eq("map")
+    { return Closure(env, params, Err(name)); }
+
+    params.push(String::from("2"));
+    if name.eq("index")
+    { return Closure(env, params, Err(name)); }
+
+    panic!("Error, unknown internal function");
 }
 
-pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> Result<SciVal, &str> {
+pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> Result<SciVal, &str> {
     if intfun.eq("index") {
         if args.len() != 3 { return Err("Arity mismatch on function 'index'"); }
 
@@ -34,13 +43,13 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
         let mut index: (usize, usize) = (0,0);
         let mut vals: Vec<f64> = vec![];
 
-        if let Number(n) = args.remove(&2).unwrap() {
+        if let Number(n) = args.remove("2").unwrap() {
             index.1 = n.round() as usize;
         }
-        if let Number(n) = args.remove(&1).unwrap() {
+        if let Number(n) = args.remove("1").unwrap() {
             index.0 = n.round() as usize;
         }
-        if let Matrix(r, c, v) = args.remove(&0).unwrap() {
+        if let Matrix(r, c, v) = args.remove("0").unwrap() {
             mshape = (r, c);
             vals = v;
         } else { return Err("First arg must be matrix"); }
@@ -52,14 +61,14 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
     } else if intfun.eq("det") {
         if args.len() != 1 { return Err("Arity mismatch on function 'det'"); }
 
-        if let Matrix(r, c, v) = args.remove(&0).unwrap() {
+        if let Matrix(r, c, v) = args.remove("0").unwrap() {
             if r != c { return Err("Error, determinant of a non-square matrix is undefined."); }
             Ok(Number(matrix_det(r, &v)))
         } else { return Err("Error, determinant only defined for matrices.") }
     } else if intfun.eq("inv") {
         if args.len() != 1 { return Err("Arity mismatch on function 'inv'"); }
 
-        if let Matrix(r, c, mut v) = args.remove(&0).unwrap() {
+        if let Matrix(r, c, mut v) = args.remove("0").unwrap() {
             if r != c { return Err("Error, inverse of a non-square matrix is undefined."); }
             if matrix_det(r, &v) == 0f64 { return Err("Error, matrix is not invertible"); }
             let ret = matrix_inv(r, &mut v);
@@ -68,7 +77,7 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
     } else if intfun.eq("transpose") {
         if args.len() != 1 { return Err("Arity mismatch on function 'transpose'"); }
 
-        if let Matrix(r, c, v) = args.remove(&0).unwrap() {
+        if let Matrix(r, c, v) = args.remove("0").unwrap() {
             let mut newv: Vec<f64> = vec![];
             for j in 0..c {
                 for i in 0..r {
@@ -80,7 +89,7 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
     } else if intfun.eq("eye") {
         if args.len() != 1 { return Err("Arity mismatch on function 'eye'"); }
 
-        if let Number(n) = args.remove(&0).unwrap() {
+        if let Number(n) = args.remove("0").unwrap() {
             if n.round() < 1f64 { return Err("Error, argument to eye must be >= 1"); }
             let n = n.round() as usize;
             let mut v = vec![0f64; n*n];
@@ -94,7 +103,7 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
     } else if intfun.eq("sqrt") {
         if args.len() != 1 { return Err("Arity mismatch on function 'sqrt'"); }
 
-        if let Number(n) = args.remove(&0).unwrap() {
+        if let Number(n) = args.remove("0").unwrap() {
             if n < 0f64 { return Err("Error, sqrt is undefined for negative numbers") }
 
             Ok(Number(n.sqrt()))
@@ -102,14 +111,14 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
     } else if intfun.eq("len") {
         if args.len() != 1 { return Err("Arity mismatch on function 'len'"); }
 
-        if let List(v) = args.remove(&0).unwrap() {
+        if let List(v) = args.remove("0").unwrap() {
             Ok(Number(v.len() as f64))
         } else { return Err("Error, len is undefined for non-list values"); }
     } else if intfun.eq("map") {
         if args.len() != 2 { return Err("Arity mismatch on function 'map'"); }
 
-        let arg1 = args.remove(&1).unwrap();
-        let arg0 = args.remove(&0).unwrap();
+        let arg1 = args.remove("1").unwrap();
+        let arg0 = args.remove("0").unwrap();
         if let List(v) = arg0 {
             let mappedv = v.into_iter().map(|x| arg1.clone().fun_app(vec![Arg::Val(Box::new(x))])).collect();
             Ok(List(mappedv))
@@ -117,20 +126,20 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<usize, SciVal>) -> R
     } else if intfun.eq("op+") {
         if args.len() != 2 { return Err("Arity mismatch on function 'op+'"); }
 
-        let rhs = args.remove(&1).unwrap();
-        let lhs = args.remove(&0).unwrap();
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
         Ok(lhs + rhs)
     } else if intfun.eq("op-") {
         if args.len() != 2 { return Err("Arity mismatch on function 'op-'"); }
 
-        let rhs = args.remove(&1).unwrap();
-        let lhs = args.remove(&0).unwrap();
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
         Ok(lhs + (Number(-1f64) * rhs))
     } else if intfun.eq("op*") {
         if args.len() != 2 { return Err("Arity mismatch on function 'op*'"); }
 
-        let rhs = args.remove(&1).unwrap();
-        let lhs = args.remove(&0).unwrap();
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
         Ok(lhs * rhs)
     }
     else { Err("Function not recognized") }

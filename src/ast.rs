@@ -34,9 +34,8 @@ pub enum SciVal {
     Number(f64),
     Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
     List(Vec<SciVal>),
-    Closure(HashMap<String, SciVal>, Vec<String>, Box<AstExpr>),  // env, params, expr
+    Closure(HashMap<String, SciVal>, Vec<String>, Result<Box<AstExpr>, String>),  // env, params, expr
     Comclos(Box<SciVal>, Box<SciVal>),
-    Internal(HashMap<usize, SciVal>, Vec<usize>, String),      // env, params, name
 }
 
 pub enum Arg {
@@ -78,7 +77,6 @@ impl Clone for SciVal {
                 SciVal::Closure(env.clone(), params.to_vec(), inner_expr.clone())
             }
             SciVal::Comclos(cls1, cls2) => SciVal::Comclos(cls1.clone(), cls2.clone()),
-            SciVal::Internal(env, params, name) => SciVal::Internal(env.clone(), params.clone(), name.clone()),
         }
     }
 }

@@ -30,6 +30,7 @@ expr_base = {
   | let_expr
   | "(" ~ expr ~ ")"
   | NUM
+  | OPID
   | ID
 }
 

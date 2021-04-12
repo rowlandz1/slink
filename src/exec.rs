@@ -102,7 +102,10 @@ impl SciVal {
                     }
                 }
                 if params.len() == 0 {
-                    Environ::from_map(env).evaluate(*expr)
+                    match expr {
+                        Ok(expr) => Environ::from_map(env).evaluate(*expr),
+                        Err(name) => internals::apply_to_internal(&name, env).unwrap(),
+                    }
                 } else {
                     Closure(env, params, expr)
                 }
@@ -110,23 +113,6 @@ impl SciVal {
             Comclos(cls1, cls2) => {
                 let inter_result = cls1.fun_app(args);
                 cls2.fun_app(vec![Arg::Val(Box::new(inter_result))])
-            }
-            Internal(mut env, mut params, name) => {
-                if params.len() < args.len() {
-                    panic!("Error: arity mismatch. Too many arguments supplied.");
-                }
-                let appliedparams = params.split_off(params.len() - args.len());
-                for (param, arg) in appliedparams.iter().zip(args) {
-                    match arg {
-                        Arg::Question => { params.push(param.clone()); }
-                        Arg::Val(arg) => { env.insert(param.clone(), *arg.clone()); }
-                    }
-                }
-                if params.len() == 0 {
-                    internals::apply_to_internal(&name, env).unwrap()
-                } else {
-                    Internal(env, params, name)
-                }
             }
             _ => panic!("Cannot apply arguments to this object"),
         }
@@ -196,7 +182,7 @@ impl Environ {
                 List(newv)
             }
             AstExpr::Lambda(params, inner_expr) => {
-                Closure(self.to_owned().var_store, params, inner_expr)
+                Closure(self.to_owned().var_store, params, Ok(inner_expr))
             }
             AstExpr::Let(bindings, inner_expr) => {
                 for (v, e) in bindings {

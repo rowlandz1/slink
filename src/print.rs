@@ -29,9 +29,10 @@ impl ToString for SciVal {
                 let vstrings: Vec<String> = v.iter().map(|x| x.to_string()).collect();
                 format!("[ {} ]", vstrings.join(", "))
             }
-            SciVal::Closure(_, _, _) =>  String::from("<function object>"),
+            SciVal::Closure(_, params, _) => {
+                format!("lam {} -> *", params.join(" "))
+            }
             SciVal::Comclos(_, _) =>  String::from("<function object>"),
-            SciVal::Internal(_,_,name) =>  format!("<internal '{}'>", name),
         }
     }
 }

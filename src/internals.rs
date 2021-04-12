@@ -19,18 +19,18 @@ pub fn get_internal(name: String) -> SciVal {
     || name.eq("eye")
     || name.eq("sqrt")
     || name.eq("len")
-    { return Closure(env, params, Err(name)); }
+    { return Closure(env, params, Err(name), None); }
 
     params.push(String::from("1"));
     if name.eq("op+")
     || name.eq("op-")
     || name.eq("op*")
     || name.eq("map")
-    { return Closure(env, params, Err(name)); }
+    { return Closure(env, params, Err(name), None); }
 
     params.push(String::from("2"));
     if name.eq("index")
-    { return Closure(env, params, Err(name)); }
+    { return Closure(env, params, Err(name), None); }
 
     panic!("Error, unknown internal function");
 }

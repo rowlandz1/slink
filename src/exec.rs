@@ -90,7 +90,7 @@ impl ops::Mul<SciVal> for SciVal {
 impl SciVal {
     pub fn fun_app(self, args: Vec<Arg>) -> SciVal {
         match self {
-            Closure(mut env, mut params, expr) => {
+            Closure(mut env, mut params, expr, next) => {
                 if params.len() < args.len() {
                     panic!("Error: arity mismatch. Too many arguments supplied.");
                 }
@@ -102,19 +102,31 @@ impl SciVal {
                     }
                 }
                 if params.len() == 0 {
-                    match expr {
+                    let result = match expr {
                         Ok(expr) => Environ::from_map(env).evaluate(*expr),
                         Err(name) => internals::apply_to_internal(&name, env).unwrap(),
+                    };
+                    match next {
+                        Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                        None => result,
                     }
                 } else {
-                    Closure(env, params, expr)
+                    Closure(env, params, expr, next)
                 }
             }
-            Comclos(cls1, cls2) => {
-                let inter_result = cls1.fun_app(args);
-                cls2.fun_app(vec![Arg::Val(Box::new(inter_result))])
-            }
             _ => panic!("Cannot apply arguments to this object"),
+        }
+    }
+
+    pub fn fun_comp(self, other: SciVal) -> SciVal {
+        if let Closure(env, params, body, next) = self {
+            let newnext = match next {
+                Some(next) => next.fun_comp(other),
+                None => other,
+            };
+            Closure(env, params, body, Some(Box::new(newnext)))
+        } else {
+            other.fun_app(vec![Arg::Val(Box::new(self))])
         }
     }
 }
@@ -160,12 +172,7 @@ impl Environ {
                 if op.eq("+") { lhs + rhs }
                 else if op.eq("-") { lhs + (Number(-1f64) * rhs) }
                 else if op.eq("*") { lhs * rhs }
-                else if op.eq(".") {
-                    match lhs {
-                        Closure(_,_,_) | Comclos(_,_) => Comclos(Box::new(lhs), Box::new(rhs)),
-                        _ => rhs.fun_app(vec![Arg::Val(Box::new(lhs))]),
-                    }
-                }
+                else if op.eq(".") { lhs.fun_comp(rhs) }
                 else { panic!("Unrecognized binary operator"); }
             }
             AstExpr::Matrix(r, c, v) => {
@@ -182,7 +189,7 @@ impl Environ {
                 List(newv)
             }
             AstExpr::Lambda(params, inner_expr) => {
-                Closure(self.to_owned().var_store, params, Ok(inner_expr))
+                Closure(self.to_owned().var_store, params, Ok(inner_expr), None)
             }
             AstExpr::Let(bindings, inner_expr) => {
                 for (v, e) in bindings {

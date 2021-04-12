@@ -3,7 +3,7 @@ digit = _{ '0'..'9' }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
 ID     = @{ alpha ~ (alpha | digit)* }
-OPID   = @{ "op" ~ ("+" | "-" | "*" | "/" | ".")+ }
+OPID   = @{ "op" ~ ("+" | "-" | "*" | "/")+ }
 NUM    = @{ digit+ ~ ("." ~ digit+)? }
 BINOP0 = @{ "+" | "-" }
 BINOP1 = @{ "*" | "/" }
@@ -20,13 +20,13 @@ stmt_assign = { ID ~ "=" ~ expr ~ ";" }
 expr  = { expr1 ~ (BINOP0 ~ expr1)* }
 expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
 expr2 = { expr3 ~ (BINOP2 ~ expr3)* }
-expr3 = { expr_base }
+expr3 = { expr4 ~ ("(" ~ arg_list ~")")* }
+expr4 = { expr_base }
 
 expr_base = {
     matrix
   | list
   | lam_expr
-  | fun_app
   | let_expr
   | "(" ~ expr ~ ")"
   | NUM
@@ -42,11 +42,6 @@ list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
 lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
 param_list = { ID+ }
 
-fun_app = {
-    ID ~ "(" ~ arg_list ~ ")"
-  | OPID ~ "(" ~ arg_list ~ ")"
-  | "(" ~ expr ~ ")" ~ "(" ~ arg_list ~ ")"
-}
 arg_list = { (arg ~ ("," ~ arg)*)? }
 arg = {
     QUEST

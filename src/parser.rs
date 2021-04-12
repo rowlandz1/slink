@@ -49,7 +49,27 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
 
             ret
         }
-        Rule::expr3 |
+        Rule::expr3 => { // Function application
+            let mut inner_rules = expr.into_inner();
+            let mut ret = get_ast_expr(inner_rules.next().unwrap());
+
+            loop {
+                if let Some(arglist) = inner_rules.next() {
+                    let mut arg_vec: Vec<AstArg> = vec![];
+                    for arg in arglist.into_inner() {
+                        let a = arg.into_inner().next().unwrap();
+                        match a.as_rule() {
+                            Rule::QUEST => arg_vec.push(AstArg::Question),
+                            Rule::expr => arg_vec.push(AstArg::Expr(Box::new(get_ast_expr(a)))),
+                            _ => unreachable!()
+                        }
+                    }
+                    ret = FunApp(Box::new(ret), arg_vec);
+                } else { break; }
+            }
+            ret
+        }
+        Rule::expr4 |
         Rule ::expr_base => {
             get_ast_expr(expr.into_inner().next().unwrap())
         }
@@ -95,20 +115,6 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
             Lambda(param_vec, Box::new(inner_expr))
-        }
-        Rule::fun_app => {
-            let mut arg_vec: Vec<AstArg> = vec![];
-            let mut inner_rules = expr.into_inner();
-            let f = get_ast_expr(inner_rules.next().unwrap());
-            for arg in inner_rules.next().unwrap().into_inner() {
-                let a = arg.into_inner().next().unwrap();
-                match a.as_rule() {
-                    Rule::QUEST => arg_vec.push(AstArg::Question),
-                    Rule::expr => arg_vec.push(AstArg::Expr(Box::new(get_ast_expr(a)))),
-                    _ => unreachable!()
-                }
-            }
-            FunApp(Box::new(f), arg_vec)
         }
         Rule::let_expr => {
             let mut inner_rules = expr.into_inner();

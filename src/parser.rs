@@ -27,7 +27,6 @@ pub fn get_ast_stmt(stmt: Pair<Rule>) -> AstStmt {
         }
         _ => unreachable!()
     }
-
 }
 
 pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {

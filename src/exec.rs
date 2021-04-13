@@ -9,20 +9,21 @@ use core::ops;
 use crate::ast::*;
 use SciVal::*;
 use crate::internals;
+use crate::error::*;
 
 impl ops::Add<SciVal> for SciVal {
-    type Output = SciVal;
-    fn add(self, rhs: SciVal) -> SciVal {
+    type Output = EvalResult<SciVal>;
+    fn add(self, rhs: SciVal) -> EvalResult<SciVal> {
         match (self, rhs) {
             (Matrix(r1, c1, m1), Matrix(r2, c2, m2)) => {
                 if c1 != c2 || r1 != r2 {
-                    panic!("Error, cannot add matrices of different shapes");
+                    return Err(EvalError::IncompatibleMatrixShapes);
                 }
                 let mut ret = vec![0f64; m1.len()];
                 for i in 0..ret.len() {
                     ret[i] = m1[i] + m2[i];
                 }
-                Matrix(r1, c1, ret)
+                Ok(Matrix(r1, c1, ret))
             }
             (Number(n), Matrix(r, c, m)) |
             (Matrix(r, c, m), Number(n)) => {
@@ -30,26 +31,26 @@ impl ops::Add<SciVal> for SciVal {
                 for i in 0..ret.len() {
                     ret[i] = m[i] + n;
                 }
-                Matrix(r, c, ret)
+                Ok(Matrix(r, c, ret))
             }
-            (Number(n1), Number(n2)) => Number(n1 + n2),
+            (Number(n1), Number(n2)) => Ok(Number(n1 + n2)),
             (List(mut v1), List(mut v2)) => {
                 v1.append(&mut v2);
-                List(v1)
+                Ok(List(v1))
             }
-            _ => panic!("Error, addition is not defined for this type"),
+            _ => Err(EvalError::TypeMismatch)
         }
     }
 }
 
 impl ops::Mul<SciVal> for SciVal {
-    type Output = SciVal;
+    type Output = EvalResult<SciVal>;
 
-    fn mul(self, rhs: SciVal) -> SciVal {
+    fn mul(self, rhs: SciVal) -> EvalResult<SciVal> {
         match (self, rhs) {
             (Matrix(r1, c1, m1), Matrix(r2, c2, m2)) => {
                 if c1 != r2 {
-                    panic!("Error, attempted to multiply matrices of incompatible sizes");
+                    return Err(EvalError::IncompatibleMatrixShapes);
                 }
                 let mut ret = vec![0f64; r1*c2];
                 for r in 0..r1 {
@@ -61,7 +62,7 @@ impl ops::Mul<SciVal> for SciVal {
                         ret[r*c2 + c] = sum;
                     }
                 }
-                Matrix(r1, c2, ret)
+                Ok(Matrix(r1, c2, ret))
             }
             (Number(n), Matrix(r, c, m)) |
             (Matrix(r, c, m), Number(n)) => {
@@ -69,30 +70,29 @@ impl ops::Mul<SciVal> for SciVal {
                 for i in 0..ret.len() {
                     ret[i] = m[i] * n;
                 }
-                Matrix(r, c, ret)
+                Ok(Matrix(r, c, ret))
             }
-            (Number(n1), Number(n2)) => Number(n1 * n2),
+            (Number(n1), Number(n2)) => Ok(Number(n1 * n2)),
             (List(v), Number(n)) => {
-                if n < 0f64 { panic!("Error, cannot repeat a list a negative number of times"); }
-                if n.round() != n { panic!("Error, cannot repeat a list a fractional number of times"); }
+                if n < 0f64 || n.round() != n { return Err(EvalError::OutOfRange); }
                 let n = n.round() as usize;
                 let mut vret: Vec<SciVal> = Vec::new();
                 for _ in 0..n {
                     vret.append(&mut v.to_vec());
                 }
-                List(vret)
+                Ok(List(vret))
             }
-            _ => panic!("Error, multiplication is not defined for this type"),
+            _ => Err(EvalError::TypeMismatch)
         }
     }
 }
 
 impl SciVal {
-    pub fn fun_app(self, args: Vec<Arg>) -> SciVal {
+    pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
         match self {
             Closure(mut env, mut params, expr, next) => {
                 if params.len() < args.len() {
-                    panic!("Error: arity mismatch. Too many arguments supplied.");
+                    return Err(EvalError::ArityMismatch);
                 }
                 let appliedparams = params.split_off(params.len() - args.len());
                 for (param, arg) in appliedparams.iter().zip(args) {
@@ -104,27 +104,27 @@ impl SciVal {
                 if params.len() == 0 {
                     let result = match expr {
                         Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                        Err(name) => internals::apply_to_internal(&name, env).unwrap(),
-                    };
+                        Err(name) => internals::apply_to_internal(&name, env),
+                    }?;
                     match next {
                         Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                        None => result,
+                        None => Ok(result),
                     }
                 } else {
-                    Closure(env, params, expr, next)
+                    Ok(Closure(env, params, expr, next))
                 }
             }
-            _ => panic!("Cannot apply arguments to this object"),
+            _ => Err(EvalError::TypeMismatch)
         }
     }
 
-    pub fn fun_comp(self, other: SciVal) -> SciVal {
+    pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {
         if let Closure(env, params, body, next) = self {
             let newnext = match next {
-                Some(next) => next.fun_comp(other),
+                Some(next) => next.fun_comp(other)?,
                 None => other,
             };
-            Closure(env, params, body, Some(Box::new(newnext)))
+            Ok(Closure(env, params, body, Some(Box::new(newnext))))
         } else {
             other.fun_app(vec![Arg::Val(Box::new(self))])
         }
@@ -154,23 +154,27 @@ impl Environ {
     pub fn execute(&mut self, stmt: AstStmt) {
         match stmt {
             AstStmt::Assign(v, e) => {
-                let evaled = self.evaluate(*e);
-                self.var_store.insert(v, evaled);
+                match self.evaluate(*e) {
+                    Ok(evaled) => { self.var_store.insert(v, evaled); }
+                    Err(e) => println!("{:?}", e),
+                }
             }
             AstStmt::Display(e) => {
-                let evaled = self.evaluate(*e);
-                println!("{}", evaled.to_string());
+                match self.evaluate(*e) {
+                    Ok(evaled) => println!("{}", evaled.to_string()),
+                    Err(e) => println!("{:?}", e)
+                }
             }
         }
     }
 
-    pub fn evaluate(&mut self, expr: AstExpr) -> SciVal {
+    pub fn evaluate(&mut self, expr: AstExpr) -> EvalResult<SciVal> {
         match expr {
             AstExpr::Binop(op, lhs, rhs) => {
-                let lhs = self.evaluate(*lhs);
-                let rhs = self.evaluate(*rhs);
+                let lhs = self.evaluate(*lhs)?;
+                let rhs = self.evaluate(*rhs)?;
                 if op.eq("+") { lhs + rhs }
-                else if op.eq("-") { lhs + (Number(-1f64) * rhs) }
+                else if op.eq("-") { lhs + (Number(-1f64) * rhs).unwrap() }
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq(".") { lhs.fun_comp(rhs) }
                 else { panic!("Unrecognized binary operator"); }
@@ -178,45 +182,47 @@ impl Environ {
             AstExpr::Matrix(r, c, v) => {
                 let mut vret: Vec<f64> = vec![];
                 for subexpr in v {
-                    if let Number(n) = self.evaluate(subexpr) {
+                    if let Number(n) = self.evaluate(subexpr)? {
                         vret.push(n);
-                    } else { panic!("Error! Non-numerical value in a matrix"); }
+                    } else { return Err(EvalError::TypeMismatch); }
                 }
-                Matrix(r, c, vret)
+                Ok(Matrix(r, c, vret))
             }
             AstExpr::List(v) => {
-                let newv = v.into_iter().map(|x| self.evaluate(x)).collect();
-                List(newv)
+                let mut newv: Vec<SciVal> = Vec::new();
+                for x in v { newv.push(self.evaluate(x)?); }
+                Ok(List(newv))
             }
             AstExpr::Tuple(v) => {
-                let newv = v.into_iter().map(|x| self.evaluate(x)).collect();
-                Tuple(newv)
+                let mut newv: Vec<SciVal> = Vec::new();
+                for x in v { newv.push(self.evaluate(x)?); }
+                Ok(Tuple(newv))
             }
             AstExpr::Lambda(params, inner_expr) => {
-                Closure(self.to_owned().var_store, params, Ok(inner_expr), None)
+                Ok(Closure(self.to_owned().var_store, params, Ok(inner_expr), None))
             }
             AstExpr::Let(bindings, inner_expr) => {
                 for (v, e) in bindings {
-                    let e_evaled = self.evaluate(e);
+                    let e_evaled = self.evaluate(e)?;
                     self.var_store.insert(v, e_evaled);
                 }
                 self.evaluate(*inner_expr)
             }
             AstExpr::FunApp(f, args) => {
-                let f = self.evaluate(*f);
-                let evalarg = |x| {
-                    match x {
+                let f = self.evaluate(*f)?;
+                let mut args_evaled: Vec<Arg> = Vec::new();
+                for arg in args {
+                    args_evaled.push(match arg {
                         AstArg::Question => Arg::Question,
-                        AstArg::Expr(e) => Arg::Val(Box::new(self.evaluate(*e))),
-                    }
-                };
-                let args_evaled = args.into_iter().map(evalarg).collect();
+                        AstArg::Expr(e) => Arg::Val(Box::new(self.evaluate(*e)?))
+                    })
+                }
                 f.fun_app(args_evaled)
             }
-            AstExpr::Num(n) => Number(n),
+            AstExpr::Num(n) => Ok(Number(n)),
             AstExpr::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
-                    v.clone()
+                    Ok(v.clone())
                 } else {
                     internals::get_internal(x)
                 }

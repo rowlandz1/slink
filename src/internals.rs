@@ -6,9 +6,11 @@
 use std::collections::HashMap;
 use crate::ast::SciVal;
 use crate::ast::Arg;
+use crate::error::EvalError;
+use crate::error::EvalResult;
 use SciVal::*;
 
-pub fn get_internal(name: String) -> SciVal {
+pub fn get_internal(name: String) -> EvalResult<SciVal> {
     let env = HashMap::new();
     let mut params: Vec<String> = Vec::new();
 
@@ -19,7 +21,7 @@ pub fn get_internal(name: String) -> SciVal {
     || name.eq("eye")
     || name.eq("sqrt")
     || name.eq("len")
-    { return Closure(env, params, Err(name), None); }
+    { return Ok(Closure(env, params, Err(name), None)); }
 
     params.push(String::from("1"));
     if name.eq("op+")
@@ -28,18 +30,18 @@ pub fn get_internal(name: String) -> SciVal {
     || name.eq("map")
     || name.eq("range")
     || name.eq("push")
-    { return Closure(env, params, Err(name), None); }
+    { return Ok(Closure(env, params, Err(name), None)); }
 
     params.push(String::from("2"));
     if name.eq("index")
-    { return Closure(env, params, Err(name), None); }
+    { return Ok(Closure(env, params, Err(name), None)); }
 
-    panic!("Error, unknown internal function");
+    Err(EvalError::UndefinedIdentifier)
 }
 
-pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> Result<SciVal, &str> {
+pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
     if intfun.eq("index") {
-        if args.len() != 3 { return Err("Arity mismatch on function 'index'"); }
+        if args.len() != 3 { return Err(EvalError::ArityMismatch); }
 
         let mut mshape: (usize, usize) = (0,0);
         let mut index: (usize, usize) = (0,0);
@@ -54,30 +56,30 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
             mshape = (r, c);
             vals = v;
-        } else { return Err("First arg must be matrix"); }
+        } else { return Err(EvalError::TypeMismatch); }
 
         if index.0 >= mshape.0 || index.1 >= mshape.1 {
-            return Err("Index out of bounds");
+            return Err(EvalError::IndexOutOfBounds);
         }
         Ok(Number(vals[index.0 * mshape.1 + index.1]))
     } else if intfun.eq("det") {
-        if args.len() != 1 { return Err("Arity mismatch on function 'det'"); }
+        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
 
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
-            if r != c { return Err("Error, determinant of a non-square matrix is undefined."); }
+            if r != c { return Err(EvalError::InvalidMatrixShape); }
             Ok(Number(matrix_det(r, &v)))
-        } else { return Err("Error, determinant only defined for matrices.") }
+        } else { return Err(EvalError::TypeMismatch) }
     } else if intfun.eq("inv") {
-        if args.len() != 1 { return Err("Arity mismatch on function 'inv'"); }
+        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
 
         if let Matrix(r, c, mut v) = args.remove("0").unwrap() {
-            if r != c { return Err("Error, inverse of a non-square matrix is undefined."); }
-            if matrix_det(r, &v) == 0f64 { return Err("Error, matrix is not invertible"); }
+            if r != c { return Err(EvalError::InvalidMatrixShape); }
+            if matrix_det(r, &v) == 0f64 { return Err(EvalError::NoninvertableMatrix); }
             let ret = matrix_inv(r, &mut v);
             Ok(Matrix(r, c, ret))
-        } else { Err("Error, inverse only defined for matrices") }
+        } else { Err(EvalError::TypeMismatch) }
     } else if intfun.eq("transpose") {
-        if args.len() != 1 { return Err("Arity mismatch on function 'transpose'"); }
+        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
 
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
             let mut newv: Vec<f64> = vec![];
@@ -87,12 +89,12 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
                 }
             }
             Ok(Matrix(c, r, newv))
-        } else { return Err("Error, transpose only defined for matrices"); }
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("eye") {
-        if args.len() != 1 { return Err("Arity mismatch on function 'eye'"); }
+        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
 
         if let Number(n) = args.remove("0").unwrap() {
-            if n.round() < 1f64 { return Err("Error, argument to eye must be >= 1"); }
+            if n.round() < 1f64 { return Err(EvalError::OutOfRange); }
             let n = n.round() as usize;
             let mut v = vec![0f64; n*n];
             let mut i = 0;
@@ -101,38 +103,42 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
                 i += n + 1;
             }
             Ok(Matrix(n, n, v))
-        } else { return Err("Error, eye accepts a number"); }
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("sqrt") {
-        if args.len() != 1 { return Err("Arity mismatch on function 'sqrt'"); }
+        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
 
         if let Number(n) = args.remove("0").unwrap() {
-            if n < 0f64 { return Err("Error, sqrt is undefined for negative numbers") }
+            if n < 0f64 { return Err(EvalError::OutOfRange) }
 
             Ok(Number(n.sqrt()))
-        } else { return Err("Error, sqrt accepts a number"); }
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("len") {
-        if args.len() != 1 { return Err("Arity mismatch on function 'len'"); }
+        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
 
         if let List(v) = args.remove("0").unwrap() {
             Ok(Number(v.len() as f64))
-        } else { return Err("Error, len is undefined for non-list values"); }
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("map") {
-        if args.len() != 2 { return Err("Arity mismatch on function 'map'"); }
+        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
 
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
         if let List(v) = arg0 {
-            let mappedv = v.into_iter().map(|x| arg1.clone().fun_app(vec![Arg::Val(Box::new(x))])).collect();
+            let mut mappedv: Vec<SciVal> = Vec::new();
+            for x in v {
+                let x = arg1.clone().fun_app(vec![Arg::Val(Box::new(x))])?;
+                mappedv.push(x);
+            }
             Ok(List(mappedv))
         } else { panic!("Error, first argument to map must be a list"); }
     } else if intfun.eq("range") {
-        if args.len() != 2 { return Err("Arity mismatch on function 'range'"); }
+        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
 
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
         if let (Number(arg0), Number(arg1)) = (arg0, arg1) {
-            if arg0.round() != arg0 { return Err("Error, value must be an integer"); }
-            if arg1.round() != arg1 { return Err("Error, value must be an integer"); }
+            if arg0.round() != arg0 { return Err(EvalError::TypeMismatch); }
+            if arg1.round() != arg1 { return Err(EvalError::TypeMismatch); }
             let arg0 = arg0 as usize;
             let arg1 = arg1 as usize;
             if arg0 >= arg1 { return Ok(List(vec![])); }
@@ -141,36 +147,36 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
                 retv.push(Number(n as f64));
             }
             return Ok(List(retv));
-        } else { return Err("Error, range is not defined for non-integer values"); }
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("push") {
-        if args.len() != 2 { return Err("Arity mismatch on function 'push'"); }
+        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
 
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
         if let List(mut v) = arg0 {
             v.push(arg1);
             Ok(List(v))
-        } else { return Err("Error, first argument to push must be a list"); }
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("op+") {
-        if args.len() != 2 { return Err("Arity mismatch on function 'op+'"); }
+        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
 
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
-        Ok(lhs + rhs)
+        lhs + rhs
     } else if intfun.eq("op-") {
-        if args.len() != 2 { return Err("Arity mismatch on function 'op-'"); }
+        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
 
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
-        Ok(lhs + (Number(-1f64) * rhs))
+        lhs + (Number(-1f64) * rhs)?
     } else if intfun.eq("op*") {
-        if args.len() != 2 { return Err("Arity mismatch on function 'op*'"); }
+        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
 
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
-        Ok(lhs * rhs)
+        lhs * rhs
     }
-    else { Err("Function not recognized") }
+    else { Err(EvalError::UndefinedIdentifier) }
 }
 
 fn matrix_det(d: usize, v: &Vec<f64>) -> f64 {

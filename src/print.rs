@@ -29,6 +29,10 @@ impl ToString for SciVal {
                 let vstrings: Vec<String> = v.iter().map(|x| x.to_string()).collect();
                 format!("[ {} ]", vstrings.join(", "))
             }
+            SciVal::Tuple(v) => {
+                let vstrings: Vec<String> = v.iter().map(|x| x.to_string()).collect();
+                format!("({})", vstrings.join(", "))
+            }
             SciVal::Closure(_, params, _, _) => {
                 format!("lam {} -> *", params.join(" "))
             }

@@ -133,7 +133,7 @@ impl SciVal {
 
 #[derive(Debug)]
 pub struct Environ {
-    var_store: HashMap<String, SciVal>,
+    pub var_store: HashMap<String, SciVal>,
 }
 
 impl Clone for Environ {
@@ -187,6 +187,10 @@ impl Environ {
             AstExpr::List(v) => {
                 let newv = v.into_iter().map(|x| self.evaluate(x)).collect();
                 List(newv)
+            }
+            AstExpr::Tuple(v) => {
+                let newv = v.into_iter().map(|x| self.evaluate(x)).collect();
+                Tuple(newv)
             }
             AstExpr::Lambda(params, inner_expr) => {
                 Closure(self.to_owned().var_store, params, Ok(inner_expr), None)

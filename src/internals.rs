@@ -27,6 +27,7 @@ pub fn get_internal(name: String) -> SciVal {
     || name.eq("op*")
     || name.eq("map")
     || name.eq("range")
+    || name.eq("push")
     { return Closure(env, params, Err(name), None); }
 
     params.push(String::from("2"));
@@ -141,6 +142,15 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
             }
             return Ok(List(retv));
         } else { return Err("Error, range is not defined for non-integer values"); }
+    } else if intfun.eq("push") {
+        if args.len() != 2 { return Err("Arity mismatch on function 'push'"); }
+
+        let arg1 = args.remove("1").unwrap();
+        let arg0 = args.remove("0").unwrap();
+        if let List(mut v) = arg0 {
+            v.push(arg1);
+            Ok(List(v))
+        } else { return Err("Error, first argument to push must be a list"); }
     } else if intfun.eq("op+") {
         if args.len() != 2 { return Err("Arity mismatch on function 'op+'"); }
 

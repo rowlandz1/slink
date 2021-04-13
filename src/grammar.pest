@@ -11,8 +11,8 @@ BINOP2 = @{ "." }
 QUEST  = @{ "?" }
 
 stmt = {
-    stmt_assign
-  | expr ~ ";"
+    SOI ~ stmt_assign
+  | SOI ~ expr ~ ";"
 }
 
 stmt_assign = { ID ~ "=" ~ expr ~ ";" }
@@ -26,6 +26,7 @@ expr4 = { expr_base }
 expr_base = {
     matrix
   | list
+  | tuple
   | lam_expr
   | let_expr
   | "(" ~ expr ~ ")"
@@ -38,6 +39,13 @@ matrix = { mat_row+ }
 mat_row = { "{" ~ expr+ ~ "}" }
 
 list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
+
+tuple = {
+    "(" ~ ")"
+  | "(" ~ expr ~ "," ~ ")"
+  | "(" ~ expr ~ "," ~ expr ~ ")"
+  | "(" ~ expr ~ ("," ~ expr)+ ~ ","? ~ ")"
+}
 
 lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
 param_list = { ID+ }

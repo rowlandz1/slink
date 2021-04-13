@@ -19,6 +19,7 @@ pub enum AstExpr {
     Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
+    Tuple(Vec<AstExpr>),
     Num(f64),
     Id(String),
 }
@@ -34,6 +35,7 @@ pub enum SciVal {
     Number(f64),
     Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
     List(Vec<SciVal>),
+    Tuple(Vec<SciVal>),
     Closure(HashMap<String, SciVal>, Vec<String>, Result<Box<AstExpr>, String>, Option<Box<SciVal>>),  // env, params, expr, next
 }
 

@@ -1,3 +1,8 @@
+/* error.rs
+ *
+ * Defines evaluation errors and error messages.
+ */
+
 #[derive(Debug)]
 pub enum EvalError {
     InvalidMatrixShape,

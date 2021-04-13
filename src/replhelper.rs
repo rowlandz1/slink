@@ -1,3 +1,8 @@
+/* replhelper.rs
+ *
+ * Code used by rustyline to control reading input from the user
+ */
+
 use rustyline::completion::Completer;
 use rustyline::hint::Hinter;
 use rustyline::highlight::Highlighter;

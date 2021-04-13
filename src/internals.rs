@@ -39,39 +39,33 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
     })
 }
 
+// Applies the arguments to the internal function.
+// NOTE: Arity mismatches need to be checked BEFORE calling this function.
 pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
     if intfun.eq("index") {
-        if args.len() != 3 { return Err(EvalError::ArityMismatch); }
+        let index_c = match args.remove("2").unwrap() {
+            Number(n) => n.round() as usize,
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
+        let index_r = match args.remove("1").unwrap() {
+            Number(n) => n.round() as usize,
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
+        let (mrows, mcols, vals) = match args.remove("0").unwrap() {
+            Matrix(r, c, v) => (r, c, v),
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
 
-        let mut mshape: (usize, usize) = (0,0);
-        let mut index: (usize, usize) = (0,0);
-        let mut vals: Vec<f64> = vec![];
-
-        if let Number(n) = args.remove("2").unwrap() {
-            index.1 = n.round() as usize;
-        }
-        if let Number(n) = args.remove("1").unwrap() {
-            index.0 = n.round() as usize;
-        }
-        if let Matrix(r, c, v) = args.remove("0").unwrap() {
-            mshape = (r, c);
-            vals = v;
-        } else { return Err(EvalError::TypeMismatch); }
-
-        if index.0 >= mshape.0 || index.1 >= mshape.1 {
+        if index_r >= mrows || index_c >= mcols {
             return Err(EvalError::IndexOutOfBounds);
         }
-        Ok(Number(vals[index.0 * mshape.1 + index.1]))
+        Ok(Number(vals[index_r * mcols + index_c]))
     } else if intfun.eq("det") {
-        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
-
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
             if r != c { return Err(EvalError::InvalidMatrixShape); }
             Ok(Number(matrix_det(r, &v)))
         } else { return Err(EvalError::TypeMismatch) }
     } else if intfun.eq("inv") {
-        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
-
         if let Matrix(r, c, mut v) = args.remove("0").unwrap() {
             if r != c { return Err(EvalError::InvalidMatrixShape); }
             if matrix_det(r, &v) == 0f64 { return Err(EvalError::NoninvertableMatrix); }
@@ -79,8 +73,6 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(Matrix(r, c, ret))
         } else { Err(EvalError::TypeMismatch) }
     } else if intfun.eq("transpose") {
-        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
-
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
             let mut newv: Vec<f64> = vec![];
             for j in 0..c {
@@ -91,8 +83,6 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(Matrix(c, r, newv))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("eye") {
-        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
-
         if let Number(n) = args.remove("0").unwrap() {
             if n.round() < 1f64 { return Err(EvalError::OutOfRange); }
             let n = n.round() as usize;
@@ -105,22 +95,16 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(Matrix(n, n, v))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("sqrt") {
-        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
-
         if let Number(n) = args.remove("0").unwrap() {
             if n < 0f64 { return Err(EvalError::OutOfRange) }
 
             Ok(Number(n.sqrt()))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("len") {
-        if args.len() != 1 { return Err(EvalError::ArityMismatch); }
-
         if let List(v) = args.remove("0").unwrap() {
             Ok(Number(v.len() as f64))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("map") {
-        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
-
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
         if let List(v) = arg0 {
@@ -132,8 +116,6 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(List(mappedv))
         } else { panic!("Error, first argument to map must be a list"); }
     } else if intfun.eq("range") {
-        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
-
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
         if let (Number(arg0), Number(arg1)) = (arg0, arg1) {
@@ -149,8 +131,6 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             return Ok(List(retv));
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("push") {
-        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
-
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
         if let List(mut v) = arg0 {
@@ -158,20 +138,14 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(List(v))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("op+") {
-        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
-
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
         lhs + rhs
     } else if intfun.eq("op-") {
-        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
-
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
         lhs + (Number(-1f64) * rhs)?
     } else if intfun.eq("op*") {
-        if args.len() != 2 { return Err(EvalError::ArityMismatch); }
-
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
         lhs * rhs

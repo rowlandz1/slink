@@ -90,7 +90,7 @@ impl ops::Mul<SciVal> for SciVal {
 impl SciVal {
     pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
         match self {
-            Closure(mut env, mut params, expr, next) => {
+            Closure{mut env, name, mut params, expr, next} => {
                 if params.len() < args.len() {
                     return Err(EvalError::ArityMismatch);
                 }
@@ -104,14 +104,22 @@ impl SciVal {
                 if params.len() == 0 {
                     let result = match expr {
                         Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                        Err(name) => internals::apply_to_internal(&name, env),
-                    }?;
+                        Err(name) => internals::apply_to_internal(name, env),
+                    };
+                    let result = match result {
+                        Ok(v) => v,
+                        Err(e) => {
+                            if let Some(name) = name {
+                                return Err(EvalError::InResolvedExpr(Box::new(e), name));
+                            } else { return Err(e); }
+                        }
+                    };
                     match next {
                         Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
                         None => Ok(result),
                     }
                 } else {
-                    Ok(Closure(env, params, expr, next))
+                    Ok(Closure{env, name, params, expr, next})
                 }
             }
             _ => Err(EvalError::TypeMismatch)
@@ -119,12 +127,12 @@ impl SciVal {
     }
 
     pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {
-        if let Closure(env, params, body, next) = self {
+        if let Closure{env, name, params, expr, next} = self {
             let newnext = match next {
                 Some(next) => next.fun_comp(other)?,
                 None => other,
             };
-            Ok(Closure(env, params, body, Some(Box::new(newnext))))
+            Ok(Closure{env, name, params, expr, next: Some(Box::new(newnext))})
         } else {
             other.fun_app(vec![Arg::Val(Box::new(self))])
         }
@@ -155,14 +163,18 @@ impl Environ {
         match stmt {
             AstStmt::Assign(v, e) => {
                 match self.evaluate(*e) {
+                    Ok(Closure{env, params, expr, next, ..}) => {
+                        let name = Some(v.clone());
+                        self.var_store.insert(v, Closure{env, name, params, expr, next});
+                    }
                     Ok(evaled) => { self.var_store.insert(v, evaled); }
-                    Err(e) => println!("{:?}", e),
+                    Err(e) => eprintln!("{}", e.to_string()),
                 }
             }
             AstStmt::Display(e) => {
                 match self.evaluate(*e) {
                     Ok(evaled) => println!("{}", evaled.to_string()),
-                    Err(e) => println!("{:?}", e)
+                    Err(e) => eprintln!("{}", e.to_string())
                 }
             }
         }
@@ -199,7 +211,13 @@ impl Environ {
                 Ok(Tuple(newv))
             }
             AstExpr::Lambda(params, inner_expr) => {
-                Ok(Closure(self.to_owned().var_store, params, Ok(inner_expr), None))
+                Ok(Closure{
+                    env: self.to_owned().var_store,
+                    name: None,
+                    params,
+                    expr: Ok(inner_expr),
+                    next: None
+                })
             }
             AstExpr::Let(bindings, inner_expr) => {
                 for (v, e) in bindings {
@@ -209,7 +227,6 @@ impl Environ {
                 self.evaluate(*inner_expr)
             }
             AstExpr::FunApp(f, args) => {
-                let f = self.evaluate(*f)?;
                 let mut args_evaled: Vec<Arg> = Vec::new();
                 for arg in args {
                     args_evaled.push(match arg {
@@ -217,6 +234,7 @@ impl Environ {
                         AstArg::Expr(e) => Arg::Val(Box::new(self.evaluate(*e)?))
                     })
                 }
+                let f = self.evaluate(*f)?;
                 f.fun_app(args_evaled)
             }
             AstExpr::Num(n) => Ok(Number(n)),

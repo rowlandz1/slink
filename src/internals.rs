@@ -12,34 +12,34 @@ use SciVal::*;
 
 pub fn get_internal(name: String) -> EvalResult<SciVal> {
     let env = HashMap::new();
-    let mut params: Vec<String> = Vec::new();
+    let params: Vec<&str> = match name.as_str() {
+        "det" |
+        "inv" |
+        "transpose" |
+        "eye" |
+        "sqrt" |
+        "len" => vec!["0"],
+        "op+" |
+        "op-" |
+        "op*" |
+        "map" |
+        "range" |
+        "push" => vec!["0", "1"],
+        "index" => vec!["0", "1", "2"],
+        _ => { return Err(EvalError::UndefinedIdentifier(name)); }
+    };
+    let params: Vec<String> = params.iter().map(|x| x.to_string()).collect();
 
-    params.push(String::from("0"));
-    if name.eq("det")
-    || name.eq("inv")
-    || name.eq("transpose")
-    || name.eq("eye")
-    || name.eq("sqrt")
-    || name.eq("len")
-    { return Ok(Closure(env, params, Err(name), None)); }
-
-    params.push(String::from("1"));
-    if name.eq("op+")
-    || name.eq("op-")
-    || name.eq("op*")
-    || name.eq("map")
-    || name.eq("range")
-    || name.eq("push")
-    { return Ok(Closure(env, params, Err(name), None)); }
-
-    params.push(String::from("2"));
-    if name.eq("index")
-    { return Ok(Closure(env, params, Err(name), None)); }
-
-    Err(EvalError::UndefinedIdentifier)
+    Ok(Closure{
+        env,
+        name: None,
+        params,
+        expr: Err(name),
+        next: None
+    })
 }
 
-pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
+pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
     if intfun.eq("index") {
         if args.len() != 3 { return Err(EvalError::ArityMismatch); }
 
@@ -176,7 +176,7 @@ pub fn apply_to_internal(intfun: &String, mut args: HashMap<String, SciVal>) -> 
         let lhs = args.remove("0").unwrap();
         lhs * rhs
     }
-    else { Err(EvalError::UndefinedIdentifier) }
+    else { Err(EvalError::UndefinedIdentifier(intfun)) }
 }
 
 fn matrix_det(d: usize, v: &Vec<f64>) -> f64 {

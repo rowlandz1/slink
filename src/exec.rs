@@ -88,42 +88,53 @@ impl ops::Mul<SciVal> for SciVal {
 }
 
 impl SciVal {
+    fn flatten_arg_list(args: Vec<Arg>) -> Vec<Arg> {
+        let mut newargs: Vec<Arg> = Vec::new();
+        for arg in args {
+            match arg {
+                Arg::Question => { newargs.push(Arg::Question); }
+                Arg::Val(v) => if let Tuple(v) = *v {
+                    for va in v { newargs.push(Arg::Val(Box::new(va))); }
+                } else { newargs.push(Arg::Val(v)); }
+            }
+        }
+        newargs
+    }
+
     pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
-        match self {
-            Closure{mut env, name, mut params, expr, next} => {
-                if params.len() < args.len() {
-                    return Err(EvalError::ArityMismatch);
-                }
-                let appliedparams = params.split_off(params.len() - args.len());
-                for (param, arg) in appliedparams.iter().zip(args) {
-                    match arg {
-                        Arg::Question => { params.push(param.clone()); }
-                        Arg::Val(arg) => { env.insert(param.clone(), *arg.clone()); }
-                    }
-                }
-                if params.len() == 0 {
-                    let result = match expr {
-                        Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                        Err(name) => internals::apply_to_internal(name, env),
-                    };
-                    let result = match result {
-                        Ok(v) => v,
-                        Err(e) => {
-                            if let Some(name) = name {
-                                return Err(EvalError::InResolvedExpr(Box::new(e), name));
-                            } else { return Err(e); }
-                        }
-                    };
-                    match next {
-                        Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                        None => Ok(result),
-                    }
-                } else {
-                    Ok(Closure{env, name, params, expr, next})
+        let args = Self::flatten_arg_list(args);
+        if let Closure{mut env, name, mut params, expr, next} = self {
+            if params.len() < args.len() {
+                return Err(EvalError::ArityMismatch);
+            }
+            let appliedparams = params.split_off(params.len() - args.len());
+            for (param, arg) in appliedparams.iter().zip(args) {
+                match arg {
+                    Arg::Question => { params.push(param.clone()); }
+                    Arg::Val(arg) => { env.insert(param.clone(), *arg.clone()); }
                 }
             }
-            _ => Err(EvalError::TypeMismatch)
-        }
+            if params.len() == 0 {
+                let result = match expr {
+                    Ok(expr) => Environ::from_map(env).evaluate(*expr),
+                    Err(name) => internals::apply_to_internal(name, env),
+                };
+                let result = match result {
+                    Ok(v) => v,
+                    Err(e) => {
+                        if let Some(name) = name {
+                            return Err(EvalError::InResolvedExpr(Box::new(e), name));
+                        } else { return Err(e); }
+                    }
+                };
+                match next {
+                    Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                    None => Ok(result),
+                }
+            } else {
+                Ok(Closure{env, name, params, expr, next})
+            }
+        } else { Err(EvalError::TypeMismatch) }
     }
 
     pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {

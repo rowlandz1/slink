@@ -24,7 +24,8 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "op*" |
         "map" |
         "range" |
-        "push" => vec!["0", "1"],
+        "push" |
+        "zip" => vec!["0", "1"],
         "index" => vec!["0", "1", "2"],
         _ => { return Err(EvalError::UndefinedIdentifier(name)); }
     };
@@ -137,6 +138,19 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             v.push(arg1);
             Ok(List(v))
         } else { return Err(EvalError::TypeMismatch); }
+    } else if intfun.eq("zip") {
+        let arg1 = match args.remove("1").unwrap() {
+            List(v) => v,
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
+        let arg0 = match args.remove("0").unwrap() {
+            List(v) => v,
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
+        let zipped = arg0.into_iter().zip(arg1.into_iter()).map(|(x, y)| {
+            Tuple(vec![x, y])
+        }).collect();
+        Ok(List(zipped))
     } else if intfun.eq("op+") {
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
@@ -178,7 +192,6 @@ fn matrix_det(d: usize, v: &Vec<f64>) -> f64 {
     det
 }
 
-// TODO: fix
 fn matrix_inv(d: usize, v: &mut Vec<f64>) -> Vec<f64> {
     if d == 1 { return vec![1f64 / v[0]]; }
 

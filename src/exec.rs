@@ -95,6 +95,13 @@ impl ops::Sub<SciVal> for SciVal {
     }
 }
 
+impl ops::Div<SciVal> for SciVal {
+    type Output = EvalResult<SciVal>;
+    fn div(self, rhs: SciVal) -> EvalResult<SciVal> {
+        self * rhs.inv()?
+    }
+}
+
 impl ops::Neg for SciVal {
     type Output = EvalResult<SciVal>;
     fn neg(self) -> EvalResult<SciVal> {
@@ -163,6 +170,14 @@ impl SciVal {
             other.fun_app(vec![Arg::Val(Box::new(self))])
         }
     }
+
+    pub fn inv(self) -> EvalResult<SciVal> {
+        match self {
+            Number(n) => Ok(Number(n.recip()?)),
+            Matrix(_, _, _) => todo!(),
+            _ => Err(EvalError::TypeMismatch),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -214,6 +229,7 @@ impl Environ {
                 if op.eq("+") { lhs + rhs }
                 else if op.eq("-") { lhs - rhs }
                 else if op.eq("*") { lhs * rhs }
+                else if op.eq("/") { lhs * rhs.inv()? }
                 else if op.eq(".") { lhs.fun_comp(rhs) }
                 else { panic!("Unrecognized binary operator"); }
             }

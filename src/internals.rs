@@ -23,6 +23,7 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "op+" |
         "op-" |
         "op*" |
+        "op/" |
         "map" |
         "range" |
         "push" |
@@ -160,6 +161,10 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
         lhs * rhs
+    } else if intfun.eq("op/") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs / rhs
     }
     else { Err(EvalError::UndefinedIdentifier(intfun)) }
 }

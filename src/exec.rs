@@ -9,6 +9,7 @@ use core::ops;
 use crate::ast::*;
 use SciVal::*;
 use crate::internals;
+use crate::number;
 use crate::error::*;
 
 impl ops::Add<SciVal> for SciVal {
@@ -19,7 +20,7 @@ impl ops::Add<SciVal> for SciVal {
                 if c1 != c2 || r1 != r2 {
                     return Err(EvalError::IncompatibleMatrixShapes);
                 }
-                let mut ret = vec![0f64; m1.len()];
+                let mut ret = vec![number::Number::Int(0); m1.len()];
                 for i in 0..ret.len() {
                     ret[i] = m1[i] + m2[i];
                 }
@@ -27,7 +28,7 @@ impl ops::Add<SciVal> for SciVal {
             }
             (Number(n), Matrix(r, c, m)) |
             (Matrix(r, c, m), Number(n)) => {
-                let mut ret = vec![0f64; m.len()];
+                let mut ret = vec![number::Number::Int(0); m.len()];
                 for i in 0..ret.len() {
                     ret[i] = m[i] + n;
                 }
@@ -52,12 +53,12 @@ impl ops::Mul<SciVal> for SciVal {
                 if c1 != r2 {
                     return Err(EvalError::IncompatibleMatrixShapes);
                 }
-                let mut ret = vec![0f64; r1*c2];
+                let mut ret = vec![number::Number::Int(0); r1*c2];
                 for r in 0..r1 {
                     for c in 0..c2 {
-                        let mut sum = 0f64;
+                        let mut sum = number::Number::Int(0);
                         for k in 0..c1 {
-                            sum += m1[r*c1 + k] * m2[k*c2 + c];
+                            sum = sum + m1[r*c1 + k] * m2[k*c2 + c];
                         }
                         ret[r*c2 + c] = sum;
                     }
@@ -66,16 +67,16 @@ impl ops::Mul<SciVal> for SciVal {
             }
             (Number(n), Matrix(r, c, m)) |
             (Matrix(r, c, m), Number(n)) => {
-                let mut ret = vec![0f64; m.len()];
+                let mut ret = vec![number::Number::Int(0); m.len()];
                 for i in 0..ret.len() {
                     ret[i] = m[i] * n;
                 }
                 Ok(Matrix(r, c, ret))
             }
             (Number(n1), Number(n2)) => Ok(Number(n1 * n2)),
-            (List(v), Number(n)) => {
-                if n < 0f64 || n.round() != n { return Err(EvalError::OutOfRange); }
-                let n = n.round() as usize;
+            (List(v), Number(number::Number::Int(n))) => {
+                if n < 0 { return Err(EvalError::OutOfRange); }
+                let n = n as usize;
                 let mut vret: Vec<SciVal> = Vec::new();
                 for _ in 0..n {
                     vret.append(&mut v.to_vec());
@@ -84,6 +85,20 @@ impl ops::Mul<SciVal> for SciVal {
             }
             _ => Err(EvalError::TypeMismatch)
         }
+    }
+}
+
+impl ops::Sub<SciVal> for SciVal {
+    type Output = EvalResult<SciVal>;
+    fn sub(self, rhs: SciVal) -> EvalResult<SciVal> {
+        self + (Number(number::Number::Int(-1))*rhs)?
+    }
+}
+
+impl ops::Neg for SciVal {
+    type Output = EvalResult<SciVal>;
+    fn neg(self) -> EvalResult<SciVal> {
+        Number(number::Number::Int(0)) - self
     }
 }
 
@@ -197,13 +212,18 @@ impl Environ {
                 let lhs = self.evaluate(*lhs)?;
                 let rhs = self.evaluate(*rhs)?;
                 if op.eq("+") { lhs + rhs }
-                else if op.eq("-") { lhs + (Number(-1f64) * rhs).unwrap() }
+                else if op.eq("-") { lhs - rhs }
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq(".") { lhs.fun_comp(rhs) }
                 else { panic!("Unrecognized binary operator"); }
             }
+            AstExpr::Unop(op, inner) => {
+                let inner = self.evaluate(*inner)?;
+                if op.eq("-") { -inner }
+                else { panic!("Unrecognized unary operator"); }
+            }
             AstExpr::Matrix(r, c, v) => {
-                let mut vret: Vec<f64> = vec![];
+                let mut vret: Vec<number::Number> = vec![];
                 for subexpr in v {
                     if let Number(n) = self.evaluate(subexpr)? {
                         vret.push(n);
@@ -248,7 +268,10 @@ impl Environ {
                 let f = self.evaluate(*f)?;
                 f.fun_app(args_evaled)
             }
-            AstExpr::Num(n) => Ok(Number(n)),
+            AstExpr::Int(n) => Ok(Number(number::Number::Int(n))),
+            AstExpr::Num(n) => Ok(Number(number::Number::Float(n))),
+            AstExpr::IntImag(n) => Ok(Number(number::Number::IntCmplx(0, n))),
+            AstExpr::FloatImag(n) => Ok(Number(number::Number::FloatCmplx(0f64, n))),
             AstExpr::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())

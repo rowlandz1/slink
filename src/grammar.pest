@@ -2,13 +2,17 @@ alpha = _{ 'a'..'z' | 'A'..'Z' }
 digit = _{ '0'..'9' }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-ID     = @{ alpha ~ (alpha | digit)* }
-OPID   = @{ "op" ~ ("+" | "-" | "*" | "/")+ }
-NUM    = @{ digit+ ~ ("." ~ digit+)? }
-BINOP0 = @{ "+" | "-" }
-BINOP1 = @{ "*" | "/" }
-BINOP2 = @{ "." }
-QUEST  = @{ "?" }
+ID        = @{ alpha ~ (alpha | digit)* }
+OPID      = @{ "op" ~ ("+" | "-" | "*" | "/")+ }
+INT       = @{ digit+ }
+FLOAT     = @{ digit+ ~ "." ~ digit+ }
+INTIMAG   = @{ digit+ ~ "i" }
+FLOATIMAG = @{ digit+ ~ "." ~ digit+ ~ "i" }
+BINOP0    = @{ "+" | "-" }
+BINOP1    = @{ "*" | "/" }
+UNOP2     = @{ "-" }
+BINOP3    = @{ "." }
+QUEST     = @{ "?" }
 
 stmt = {
     SOI ~ stmt_assign
@@ -19,9 +23,10 @@ stmt_assign = { ID ~ "=" ~ expr ~ ";" }
 
 expr  = { expr1 ~ (BINOP0 ~ expr1)* }
 expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
-expr2 = { expr3 ~ (BINOP2 ~ expr3)* }
-expr3 = { expr4 ~ ("(" ~ arg_list ~")")* }
-expr4 = { expr_base }
+expr2 = { UNOP2* ~ expr3 }
+expr3 = { expr4 ~ (BINOP3 ~ expr4)* }
+expr4 = { expr5 ~ ("(" ~ arg_list ~")")* }
+expr5 = { expr_base }
 
 expr_base = {
     matrix
@@ -30,7 +35,10 @@ expr_base = {
   | lam_expr
   | let_expr
   | "(" ~ expr ~ ")"
-  | NUM
+  | FLOATIMAG
+  | INTIMAG
+  | FLOAT
+  | INT
   | OPID
   | ID
 }

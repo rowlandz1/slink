@@ -33,7 +33,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
     match expr.as_rule() {
         Rule::expr |
         Rule::expr1 |
-        Rule::expr2 => {
+        Rule::expr3 => {
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -45,10 +45,21 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
                     ret = Binop(op, Box::new(ret), Box::new(operand2));
                 } else { break; }
             }
-
             ret
         }
-        Rule::expr3 => { // Function application
+        Rule::expr2 => {
+            let mut inner_rules = expr.into_inner().rev();
+            let mut ret = get_ast_expr(inner_rules.next().unwrap());
+
+            loop {
+                if let Some(op) = inner_rules.next() {
+                    let op = op.as_str().to_string();
+                    ret = Unop(op, Box::new(ret));
+                } else { break; }
+            }
+            ret
+        }
+        Rule::expr4 => { // Function application
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -68,7 +79,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr4 |
+        Rule::expr5 |
         Rule ::expr_base => {
             get_ast_expr(expr.into_inner().next().unwrap())
         }
@@ -128,10 +139,25 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
         Rule::OPID => {
             Id(expr.as_str().to_string())
         }
-        Rule::NUM => {
+        Rule::FLOATIMAG => {
+            let value: f64 = expr.as_str().trim_end_matches("i").parse()
+                .expect("Cannot parse float imaginary");
+            FloatImag(value)
+        }
+        Rule::INTIMAG => {
+            let value: i32 = expr.as_str().trim_end_matches("i").parse()
+                .expect("Cannot parse int imaginary");
+            IntImag(value)
+        }
+        Rule::FLOAT => {
             let value: f64 = expr.as_str().parse()
                 .expect("Cannot parse number");
             Num(value)
+        }
+        Rule::INT => {
+            let value: i32 = expr.as_str().parse()
+                .expect("Cannot parse number");
+            Int(value)
         }
         _ => unreachable!()
     }

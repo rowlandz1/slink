@@ -8,6 +8,7 @@ use crate::ast::SciVal;
 use crate::ast::Arg;
 use crate::error::EvalError;
 use crate::error::EvalResult;
+use crate::number;
 use SciVal::*;
 
 pub fn get_internal(name: String) -> EvalResult<SciVal> {
@@ -45,11 +46,11 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
 pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
     if intfun.eq("index") {
         let index_c = match args.remove("2").unwrap() {
-            Number(n) => n.round() as usize,
+            Number(number::Number::Int(n)) => n as usize,
             _ => { return Err(EvalError::TypeMismatch); }
         };
         let index_r = match args.remove("1").unwrap() {
-            Number(n) => n.round() as usize,
+            Number(number::Number::Int(n)) => n as usize,
             _ => { return Err(EvalError::TypeMismatch); }
         };
         let (mrows, mcols, vals) = match args.remove("0").unwrap() {
@@ -69,13 +70,13 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("inv") {
         if let Matrix(r, c, mut v) = args.remove("0").unwrap() {
             if r != c { return Err(EvalError::InvalidMatrixShape); }
-            if matrix_det(r, &v) == 0f64 { return Err(EvalError::NoninvertableMatrix); }
-            let ret = matrix_inv(r, &mut v);
+            if matrix_det(r, &v) == number::Number::Float(0f64) { return Err(EvalError::NoninvertableMatrix); }
+            let ret = matrix_inv(r, &mut v)?;
             Ok(Matrix(r, c, ret))
         } else { Err(EvalError::TypeMismatch) }
     } else if intfun.eq("transpose") {
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
-            let mut newv: Vec<f64> = vec![];
+            let mut newv: Vec<number::Number> = vec![];
             for j in 0..c {
                 for i in 0..r {
                     newv.push(v[i*c + j]);
@@ -84,26 +85,24 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(Matrix(c, r, newv))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("eye") {
-        if let Number(n) = args.remove("0").unwrap() {
-            if n.round() < 1f64 { return Err(EvalError::OutOfRange); }
-            let n = n.round() as usize;
-            let mut v = vec![0f64; n*n];
+        if let Number(number::Number::Int(n)) = args.remove("0").unwrap() {
+            if n < 1 { return Err(EvalError::OutOfRange); }
+            let n = n as usize;
+            let mut v = vec![number::Number::Int(0); n*n];
             let mut i = 0;
             while i < v.len() {
-                v[i] = 1f64;
+                v[i] = number::Number::Int(1);
                 i += n + 1;
             }
             Ok(Matrix(n, n, v))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("sqrt") {
         if let Number(n) = args.remove("0").unwrap() {
-            if n < 0f64 { return Err(EvalError::OutOfRange) }
-
-            Ok(Number(n.sqrt()))
+            Ok(Number(n.sqrt()?))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("len") {
         if let List(v) = args.remove("0").unwrap() {
-            Ok(Number(v.len() as f64))
+            Ok(Number(number::Number::Int(v.len() as i32)))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("map") {
         let arg1 = args.remove("1").unwrap();
@@ -119,15 +118,13 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("range") {
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
-        if let (Number(arg0), Number(arg1)) = (arg0, arg1) {
-            if arg0.round() != arg0 { return Err(EvalError::TypeMismatch); }
-            if arg1.round() != arg1 { return Err(EvalError::TypeMismatch); }
+        if let (Number(number::Number::Int(arg0)), Number(number::Number::Int(arg1))) = (arg0, arg1) {
             let arg0 = arg0 as usize;
             let arg1 = arg1 as usize;
             if arg0 >= arg1 { return Ok(List(vec![])); }
             let mut retv: Vec<SciVal> = Vec::new();
             for n in arg0..arg1 {
-                retv.push(Number(n as f64));
+                retv.push(Number(number::Number::Int(n as i32)));
             }
             return Ok(List(retv));
         } else { return Err(EvalError::TypeMismatch); }
@@ -158,7 +155,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("op-") {
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
-        lhs + (Number(-1f64) * rhs)?
+        lhs + (Number(number::Number::Int(-1)) * rhs)?
     } else if intfun.eq("op*") {
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
@@ -167,11 +164,11 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     else { Err(EvalError::UndefinedIdentifier(intfun)) }
 }
 
-fn matrix_det(d: usize, v: &Vec<f64>) -> f64 {
+fn matrix_det(d: usize, v: &Vec<number::Number>) -> number::Number {
     if d == 1 { return v[0]; }
     if d == 2 { return v[0]*v[3] - v[2]*v[1]; }
 
-    let mut submatrix: Vec<f64> = vec![0f64; (d-1)*(d-1)];
+    let mut submatrix: Vec<number::Number> = vec![number::Number::Int(0); (d-1)*(d-1)];
     let mut j = 0;
     for i in (d+1)..v.len() {
         if i % d == 0 { continue; }
@@ -180,42 +177,42 @@ fn matrix_det(d: usize, v: &Vec<f64>) -> f64 {
     }
 
     let mut det = v[0] * matrix_det(d-1, &submatrix);
-    let mut sign = 1f64;
+    let mut sign = number::Number::Int(1);
     for r in 1..d {
-        sign = sign * -1f64;
+        sign = sign * number::Number::Int(-1);
         for c in 1..d {
             submatrix[(r-1)*(d-1) + c-1] = v[(r-1)*d + c];
         }
-        det += sign * v[r*d] * matrix_det(d-1, &submatrix);
+        det = det + sign * v[r*d] * matrix_det(d-1, &submatrix);
     }
 
     det
 }
 
-fn matrix_inv(d: usize, v: &mut Vec<f64>) -> Vec<f64> {
-    if d == 1 { return vec![1f64 / v[0]]; }
+fn matrix_inv(d: usize, v: &mut Vec<number::Number>) -> EvalResult<Vec<number::Number>> {
+    if d == 1 { return Ok(vec![v[0].recip()?]); }
 
-    let mut ret = vec![0f64; d*d];
+    let mut ret = vec![number::Number::Int(0); d*d];
     let mut i = 0;
     while i < ret.len() {
-        ret[i] = 1f64;
+        ret[i] = number::Number::Int(1);
         i += d + 1;
     }
     for r in 0..d {
         let e = v[r*d + r];
         for c in 0..d {
-            v[r*d + c] /= e;
-            ret[r*d + c] = ret[r*d + c] / e;
+            v[r*d + c] = (v[r*d + c] / e)?;
+            ret[r*d + c] = (ret[r*d + c] / e)?;
         }
         for r2 in 0..d {
             if r2 != r {
                 let e2 = v[r2*d + r];
                 for c2 in 0..d {
-                    v[r2*d + c2] -= e2 * v[r*d + c2];
-                    ret[r2*d + c2] -= e2 * ret[r*d + c2];
+                    v[r2*d + c2] = v[r2*d + c2] - e2*v[r*d + c2];
+                    ret[r2*d + c2] = ret[r2*d + c2] - e2*ret[r*d + c2];
                 }
             }
         }
     }
-    ret
+    Ok(ret)
 }

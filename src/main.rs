@@ -5,6 +5,7 @@ mod internals;
 mod print;
 mod replhelper;
 mod error;
+mod number;
 
 extern crate pest;
 #[macro_use]

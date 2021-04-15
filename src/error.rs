@@ -13,6 +13,7 @@ pub enum EvalError {
     TypeMismatch,
     UndefinedIdentifier(String),
     OutOfRange,
+    DivideByZero,
     InResolvedExpr(Box<EvalError>, String),
 }
 
@@ -44,6 +45,9 @@ impl ToString for EvalError {
             }
             EvalError::OutOfRange => {
                 format!("Error: out of range")
+            }
+            EvalError::DivideByZero => {
+                format!("Error: divide by zero")
             }
             EvalError::InResolvedExpr(innererr, f) => {
                 format!("In resolved expression of {}\n{}", f, innererr.to_string())

@@ -4,6 +4,7 @@
  */
 
 use std::collections::HashMap;
+use crate::number;
 
 #[derive(Debug, Clone)]
 pub enum AstStmt {
@@ -14,13 +15,17 @@ pub enum AstStmt {
 #[derive(Debug, Clone)]
 pub enum AstExpr {
     Binop(String, Box<AstExpr>, Box<AstExpr>),
+    Unop(String, Box<AstExpr>),
     Lambda(Vec<String>, Box<AstExpr>),
     FunApp(Box<AstExpr>, Vec<AstArg>),
     Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
     Tuple(Vec<AstExpr>),
+    Int(i32),
     Num(f64),
+    IntImag(i32),
+    FloatImag(f64),
     Id(String),
 }
 
@@ -32,8 +37,8 @@ pub enum AstArg {
 
 #[derive(Debug, Clone)]
 pub enum SciVal {
-    Number(f64),
-    Matrix(usize, usize, Vec<f64>),  // numrows, numcols, index = row*numcols + col
+    Number(number::Number),
+    Matrix(usize, usize, Vec<number::Number>),  // numrows, numcols, index = row*numcols + col
     List(Vec<SciVal>),
     Tuple(Vec<SciVal>),
     Closure {

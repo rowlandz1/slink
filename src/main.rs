@@ -6,6 +6,8 @@ mod print;
 mod replhelper;
 mod error;
 mod number;
+mod matrix;
+mod value;
 
 extern crate pest;
 #[macro_use]

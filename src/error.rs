@@ -14,6 +14,7 @@ pub enum EvalError {
     UndefinedIdentifier(String),
     OutOfRange,
     DivideByZero,
+    QuestionMarkMacroArg,
     InResolvedExpr(Box<EvalError>, String),
 }
 
@@ -48,6 +49,9 @@ impl ToString for EvalError {
             }
             EvalError::DivideByZero => {
                 format!("Error: divide by zero")
+            }
+            EvalError::QuestionMarkMacroArg => {
+                format!("Error: question mark syntax cannot be used when calling a macro")
             }
             EvalError::InResolvedExpr(innererr, f) => {
                 format!("In resolved expression of {}\n{}", f, innererr.to_string())

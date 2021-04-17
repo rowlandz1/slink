@@ -118,6 +118,7 @@ impl Environ {
             AstExpr::Num(n) => Ok(Number(number::Number::Float(n))),
             AstExpr::IntImag(n) => Ok(Number(number::Number::IntCmplx(0, n))),
             AstExpr::FloatImag(n) => Ok(Number(number::Number::FloatCmplx(0f64, n))),
+            AstExpr::Macro(name) => Ok(Macro(name)),
             AstExpr::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())

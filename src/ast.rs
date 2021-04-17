@@ -18,6 +18,7 @@ pub enum AstExpr {
     Unop(String, Box<AstExpr>),
     Lambda(Vec<String>, Box<AstExpr>),
     FunApp(Box<AstExpr>, Vec<AstArg>),
+    Macro(String),
     Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
@@ -47,7 +48,8 @@ pub enum SciVal {
         params: Vec<String>,
         expr: Result<Box<AstExpr>, String>,
         next: Option<Box<SciVal>>,
-    }
+    },
+    Macro(String),
 }
 
 pub enum Arg {

@@ -13,8 +13,11 @@
  use crate::error::*;
  use crate::matrix;
  use crate::exec::Environ;
+ use crate::macros;
 
  impl SciVal {
+     // Unpacks top-level tuple values from an argument list.
+     // Used by fun_app and macro_app
      fn flatten_arg_list(args: Vec<Arg>) -> Vec<Arg> {
          let mut newargs: Vec<Arg> = Vec::new();
          for arg in args {
@@ -28,6 +31,8 @@
          newargs
      }
 
+     // Function application. "self" should be a Closure or a Macro,
+     // otherwise a a type error will be returned.
      pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
          let args = Self::flatten_arg_list(args);
          if let Closure{mut env, name, mut params, expr, next} = self {
@@ -61,7 +66,18 @@
              } else {
                  Ok(Closure{env, name, params, expr, next})
              }
-         } else { Err(EvalError::TypeMismatch) }
+         }
+         else if let Macro(name) = self {
+             let mut newargs: Vec<SciVal> = Vec::new();
+             for arg in args.into_iter() {
+                 match arg {
+                     Arg::Question => { return Err(EvalError::QuestionMarkMacroArg); }
+                     Arg::Val(v) => { newargs.push(*v); }
+                 }
+             }
+             macros::apply_to_macro(name, newargs)
+         }
+         else { Err(EvalError::TypeMismatch) }
      }
 
      pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {

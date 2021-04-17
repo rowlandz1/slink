@@ -8,6 +8,7 @@ mod error;
 mod number;
 mod matrix;
 mod value;
+mod macros;
 
 extern crate pest;
 #[macro_use]

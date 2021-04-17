@@ -4,6 +4,7 @@ WHITESPACE = _{ " " | "\t" | "\n" }
 
 ID        = @{ alpha ~ (alpha | digit)* }
 OPID      = @{ "op" ~ ("+" | "-" | "*" | "/")+ }
+MACROID   = @{ alpha ~ (alpha | digit)* ~ "!" }
 INT       = @{ digit+ }
 FLOAT     = @{ digit+ ~ "." ~ digit+ }
 INTIMAG   = @{ digit+ ~ "i" }
@@ -31,15 +32,16 @@ expr5 = { expr_base }
 expr_base = {
     matrix
   | list
-  | tuple
   | lam_expr
   | let_expr
+  | tuple
   | "(" ~ expr ~ ")"
   | FLOATIMAG
   | INTIMAG
   | FLOAT
   | INT
   | OPID
+  | MACROID
   | ID
 }
 
@@ -48,6 +50,12 @@ mat_row = { "{" ~ expr+ ~ "}" }
 
 list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
 
+lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
+param_list = { ID+ }
+
+let_expr = { "let" ~ var_bindings ~ "in" ~ expr }
+var_bindings = { ID ~ "=" ~ expr ~ ("," ~ ID ~ "=" ~ expr)* }
+
 tuple = {
     "(" ~ ")"
   | "(" ~ expr ~ "," ~ ")"
@@ -55,14 +63,8 @@ tuple = {
   | "(" ~ expr ~ ("," ~ expr)+ ~ ","? ~ ")"
 }
 
-lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
-param_list = { ID+ }
-
 arg_list = { (arg ~ ("," ~ arg)*)? }
 arg = {
     QUEST
   | expr
 }
-
-let_expr = { "let" ~ var_bindings ~ "in" ~ expr }
-var_bindings = { ID ~ "=" ~ expr ~ ("," ~ ID ~ "=" ~ expr)* }

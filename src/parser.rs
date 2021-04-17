@@ -111,7 +111,6 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             Matrix(numrows, numcols, firstrow)
         }
         Rule::list => List(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
-        Rule::tuple => Tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
         Rule::lam_expr => {
             let mut param_vec: Vec<String> = vec![];
             let mut inner_rules = expr.into_inner();
@@ -135,9 +134,13 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
             Let(bindings, Box::new(inner_expr))
         }
+        Rule::tuple => Tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
         Rule::ID |
         Rule::OPID => {
             Id(expr.as_str().to_string())
+        }
+        Rule::MACROID => {
+            Macro(expr.as_str().to_string())
         }
         Rule::FLOATIMAG => {
             let value: f64 = expr.as_str().trim_end_matches("i").parse()

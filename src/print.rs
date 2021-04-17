@@ -9,6 +9,7 @@ impl ToString for SciVal {
     fn to_string(&self) -> String {
         match self {
             SciVal::Number(n) => n.to_string(),
+            SciVal::Bool(b) => b.to_string(),
             SciVal::Matrix(_, c, v) => {
                 let mut vs: Vec<String> = vec![];
                 let mut elemlen = 1;

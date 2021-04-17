@@ -23,6 +23,7 @@ pub enum AstExpr {
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
     Tuple(Vec<AstExpr>),
+    Bool(bool),
     Int(i32),
     Num(f64),
     IntImag(i32),
@@ -39,6 +40,7 @@ pub enum AstArg {
 #[derive(Debug, Clone)]
 pub enum SciVal {
     Number(number::Number),
+    Bool(bool),
     Matrix(usize, usize, Vec<number::Number>),  // numrows, numcols, index = row*numcols + col
     List(Vec<SciVal>),
     Tuple(Vec<SciVal>),

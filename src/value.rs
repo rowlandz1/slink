@@ -126,6 +126,48 @@
              _ => Err(EvalError::TypeMismatch)
          }
      }
+
+     pub fn equals(&self, rhs: &SciVal) -> EvalResult<SciVal> {
+         match (self, rhs) {
+             (Bool(b1), Bool(b2)) => Ok(Bool(b1 == b2)),
+             (Number(n1), Number(n2)) => Ok(Bool(n1 == n2)),
+             (Matrix(r1, c1, m1), Matrix(r2, c2, m2)) => {
+                 if r1 != r2 || c1 != c2 { return Ok(Bool(false)); }
+                 Ok(Bool(m1.iter().zip(m2.iter()).all(|p|{ p.0 == p.1 })))
+             }
+             (List(v1), List(v2)) |
+             (Tuple(v1), Tuple(v2)) => {
+                 for (a, b) in v1.iter().zip(v2.iter()) {
+                     if let Bool(false) = a.equals(b)? { return Ok(Bool(false)); }
+                 }
+                 Ok(Bool(true))
+             }
+             _ => Err(EvalError::TypeMismatch),
+         }
+     }
+
+     pub fn not_equals(&self, rhs: &SciVal) -> EvalResult<SciVal> {
+         self.equals(rhs)?.negate()
+     }
+
+     pub fn negate(&self) -> EvalResult<SciVal> {
+         if let Bool(b) = self { Ok(Bool(!b)) }
+         else { Err(EvalError::TypeMismatch) }
+     }
+
+     pub fn logical_and(self, rhs: SciVal) -> EvalResult<SciVal> {
+         match (self, rhs) {
+             (Bool(b1), Bool(b2)) => Ok(Bool(b1 && b2)),
+             _ => Err(EvalError::TypeMismatch)
+         }
+     }
+
+     pub fn logical_or(self, rhs: SciVal) -> EvalResult<SciVal> {
+         match (self, rhs) {
+             (Bool(b1), Bool(b2)) => Ok(Bool(b1 || b2)),
+             _ => Err(EvalError::TypeMismatch)
+         }
+     }
  }
 
  impl ops::Add<SciVal> for SciVal {

@@ -33,7 +33,10 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
     match expr.as_rule() {
         Rule::expr |
         Rule::expr1 |
-        Rule::expr3 => {
+        Rule::expr2 |
+        Rule::expr3 |
+        Rule::expr4 |
+        Rule::expr6 => {
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -47,7 +50,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr2 => {
+        Rule::expr5 => {
             let mut inner_rules = expr.into_inner().rev();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -59,7 +62,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr4 => { // Function application
+        Rule::expr7 => { // Function application
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -79,7 +82,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr5 |
+        Rule::expr8 |
         Rule ::expr_base => {
             get_ast_expr(expr.into_inner().next().unwrap())
         }
@@ -135,6 +138,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             Let(bindings, Box::new(inner_expr))
         }
         Rule::tuple => Tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
+        Rule::bool => Bool(expr.as_str().eq("true")),
         Rule::ID |
         Rule::OPID => {
             Id(expr.as_str().to_string())

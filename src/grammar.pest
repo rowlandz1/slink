@@ -9,10 +9,13 @@ INT       = @{ digit+ }
 FLOAT     = @{ digit+ ~ "." ~ digit+ }
 INTIMAG   = @{ digit+ ~ "i" }
 FLOATIMAG = @{ digit+ ~ "." ~ digit+ ~ "i" }
-BINOP0    = @{ "+" | "-" }
-BINOP1    = @{ "*" | "/" }
-UNOP2     = @{ "-" }
-BINOP3    = @{ "." }
+BINOP0    = @{ "||" }
+BINOP1    = @{ "&&" }
+BINOP2    = @{ "==" | "!=" }
+BINOP3    = @{ "+" | "-" }
+BINOP4    = @{ "*" | "/" }
+UNOP5     = @{ "-" }
+BINOP6    = @{ "." }
 QUEST     = @{ "?" }
 
 stmt = {
@@ -24,10 +27,13 @@ stmt_assign = { ID ~ "=" ~ expr ~ ";" }
 
 expr  = { expr1 ~ (BINOP0 ~ expr1)* }
 expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
-expr2 = { UNOP2* ~ expr3 }
+expr2 = { expr3 ~ (BINOP2 ~ expr3)* }
 expr3 = { expr4 ~ (BINOP3 ~ expr4)* }
-expr4 = { expr5 ~ ("(" ~ arg_list ~")")* }
-expr5 = { expr_base }
+expr4 = { expr5 ~ (BINOP4 ~ expr5)* }
+expr5 = { UNOP5* ~ expr6 }
+expr6 = { expr7 ~ (BINOP6 ~ expr7)* }
+expr7 = { expr8 ~ ("(" ~ arg_list ~")")* }
+expr8 = { expr_base }
 
 expr_base = {
     matrix
@@ -36,6 +42,7 @@ expr_base = {
   | let_expr
   | tuple
   | "(" ~ expr ~ ")"
+  | bool
   | FLOATIMAG
   | INTIMAG
   | FLOAT
@@ -62,6 +69,8 @@ tuple = {
   | "(" ~ expr ~ "," ~ expr ~ ")"
   | "(" ~ expr ~ ("," ~ expr)+ ~ ","? ~ ")"
 }
+
+bool = { "true" | "false" }
 
 arg_list = { (arg ~ ("," ~ arg)*)? }
 arg = {

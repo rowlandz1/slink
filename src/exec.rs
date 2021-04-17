@@ -61,6 +61,10 @@ impl Environ {
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq("/") { lhs * rhs.inv()? }
                 else if op.eq(".") { lhs.fun_comp(rhs) }
+                else if op.eq("==") { lhs.equals(&rhs) }
+                else if op.eq("!=") { lhs.not_equals(&rhs) }
+                else if op.eq("&&") { lhs.logical_and(rhs) }
+                else if op.eq("||") {lhs.logical_or(rhs) }
                 else { panic!("Unrecognized binary operator"); }
             }
             AstExpr::Unop(op, inner) => {
@@ -114,6 +118,7 @@ impl Environ {
                 let f = self.evaluate(*f)?;
                 f.fun_app(args_evaled)
             }
+            AstExpr::Bool(b) => Ok(Bool(b)),
             AstExpr::Int(n) => Ok(Number(number::Number::Int(n))),
             AstExpr::Num(n) => Ok(Number(number::Number::Float(n))),
             AstExpr::IntImag(n) => Ok(Number(number::Number::IntCmplx(0, n))),

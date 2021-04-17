@@ -60,9 +60,14 @@ impl Environ {
                 else if op.eq("-") { lhs - rhs }
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq("/") { lhs * rhs.inv()? }
+                else if op.eq("%") { lhs % rhs }
                 else if op.eq(".") { lhs.fun_comp(rhs) }
                 else if op.eq("==") { lhs.equals(&rhs) }
                 else if op.eq("!=") { lhs.not_equals(&rhs) }
+                else if op.eq("<=") { lhs.le(&rhs) }
+                else if op.eq(">=") { lhs.ge(&rhs) }
+                else if op.eq("<") { lhs.lt(&rhs) }
+                else if op.eq(">") { lhs.gt(&rhs) }
                 else if op.eq("&&") { lhs.logical_and(rhs) }
                 else if op.eq("||") {lhs.logical_or(rhs) }
                 else { panic!("Unrecognized binary operator"); }

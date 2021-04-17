@@ -3,7 +3,7 @@ digit = _{ '0'..'9' }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
 ID        = @{ alpha ~ (alpha | digit)* }
-OPID      = @{ "op" ~ ("+" | "-" | "*" | "/")+ }
+OPID      = @{ "op" ~ ("+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<=" | ">=" | "<" | ">" ) }
 MACROID   = @{ alpha ~ (alpha | digit)* ~ "!" }
 INT       = @{ digit+ }
 FLOAT     = @{ digit+ ~ "." ~ digit+ }
@@ -11,9 +11,9 @@ INTIMAG   = @{ digit+ ~ "i" }
 FLOATIMAG = @{ digit+ ~ "." ~ digit+ ~ "i" }
 BINOP0    = @{ "||" }
 BINOP1    = @{ "&&" }
-BINOP2    = @{ "==" | "!=" }
+BINOP2    = @{ "==" | "!=" | "<=" | ">=" | "<" | ">" }
 BINOP3    = @{ "+" | "-" }
-BINOP4    = @{ "*" | "/" }
+BINOP4    = @{ "*" | "/" | "%" }
 UNOP5     = @{ "-" }
 BINOP6    = @{ "." }
 QUEST     = @{ "?" }

@@ -27,10 +27,19 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "op-" |
         "op*" |
         "op/" |
+        "op%" |
+        "op==" |
+        "op!=" |
+        "op>=" |
+        "op<=" |
+        "op>" |
+        "op<" |
         "map" |
+        "filter" |
         "range" |
         "push" |
         "zip" => vec!["0", "1"],
+        "reduce" |
         "index" => vec!["0", "1", "2"],
         _ => { return Err(EvalError::UndefinedIdentifier(name)); }
     };
@@ -66,6 +75,17 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             return Err(EvalError::IndexOutOfBounds);
         }
         Ok(Number(vals[index_r * mcols + index_c]))
+    } else if intfun.eq("reduce") {
+        let arg2 = args.remove("2").unwrap();
+        let arg1 = args.remove("1").unwrap();
+        let arg0 = if let List(v) = args.remove("0").unwrap() {v}
+                   else { return Err(EvalError::TypeMismatch); };
+        let mut ret: SciVal = arg1;
+        for item in arg0 {
+            let arglist = vec![Arg::Val(Box::new(ret)), Arg::Val(Box::new(item))];
+            ret = arg2.clone().fun_app(arglist)?;
+        }
+        Ok(ret)
     } else if intfun.eq("det") {
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
             if r != c { return Err(EvalError::InvalidMatrixShape); }
@@ -117,7 +137,20 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
                 mappedv.push(x);
             }
             Ok(List(mappedv))
-        } else { panic!("Error, first argument to map must be a list"); }
+        } else { Err(EvalError::TypeMismatch) }
+    } else if intfun.eq("filter") {
+        let arg1 = args.remove("1").unwrap();
+        let arg0 = args.remove("0").unwrap();
+        if let List(v) = arg0 {
+            let mut filteredv: Vec<SciVal> = Vec::new();
+            for x in v {
+                let sat = arg1.clone().fun_app(vec![Arg::Val(Box::new(x.clone()))])?;
+                if let Bool(b) = sat {
+                    if b { filteredv.push(x); }
+                } else { return Err(EvalError::TypeMismatch); }
+            }
+            Ok(List(filteredv))
+        } else { Err(EvalError::TypeMismatch) }
     } else if intfun.eq("range") {
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
@@ -167,6 +200,34 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
         lhs / rhs
+    } else if intfun.eq("op%") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs % rhs
+    } else if intfun.eq("op==") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs.equals(&rhs)
+    } else if intfun.eq("op!=") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs.not_equals(&rhs)
+    } else if intfun.eq("op<=") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs.le(&rhs)
+    } else if intfun.eq("op>=") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs.ge(&rhs)
+    } else if intfun.eq("op<") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs.lt(&rhs)
+    } else if intfun.eq("op>") {
+        let rhs = args.remove("1").unwrap();
+        let lhs = args.remove("0").unwrap();
+        lhs.gt(&rhs)
     }
     else { Err(EvalError::UndefinedIdentifier(intfun)) }
 }

@@ -1,6 +1,6 @@
 use core::ops;
+use core::cmp;
 use std::fmt;
-use std::cmp;
 use crate::error::{EvalError, EvalResult};
 use Number::*;
 
@@ -65,6 +65,16 @@ impl Number {
                 if n >= 0f64 { Ok(Float((n as f64).sqrt())) }
                 else { Err(EvalError::OutOfRange) }
             }
+            _ => Err(EvalError::TypeMismatch)
+        }
+    }
+
+    pub fn compare(&self, rhs: &Number) -> EvalResult<cmp::Ordering> {
+        match (self, rhs) {
+            (Int(n1), Int(n2)) => Ok(n1.cmp(n2)),
+            (Int(n1), Float(n2)) => Ok((*n1 as f64).partial_cmp(n2).unwrap()),
+            (Float(n1), Int(n2)) => Ok(n1.partial_cmp(&(*n2 as f64)).unwrap()),
+            (Float(n1), Float(n2)) => Ok(n1.partial_cmp(n2).unwrap()),
             _ => Err(EvalError::TypeMismatch)
         }
     }
@@ -134,6 +144,15 @@ impl ops::Div<Number> for Number {
     type Output = EvalResult<Number>;
     fn div(self, rhs: Number) -> EvalResult<Number> {
         Ok(self * rhs.recip()?)
+    }
+}
+
+impl ops::Rem for Number {
+    type Output = EvalResult<Number>;
+    fn rem(self, rhs: Self) -> EvalResult<Number> {
+        if let (Int(n1), Int(n2)) = (self, rhs) {
+            Ok(Int(n1 % n2))
+        } else { Err(EvalError::TypeMismatch) }
     }
 }
 

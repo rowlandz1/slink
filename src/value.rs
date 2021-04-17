@@ -6,6 +6,7 @@
  */
 
  use core::ops;
+ use core::cmp;
  use crate::ast::*;
  use SciVal::*;
  use crate::internals;
@@ -150,6 +151,43 @@
          self.equals(rhs)?.negate()
      }
 
+     pub fn compare(&self, rhs: &SciVal) -> EvalResult<cmp::Ordering> {
+         if let (Number(n1), Number(n2)) = (self, rhs) { n1.compare(n2) }
+         else { Err(EvalError::TypeMismatch) }
+     }
+
+     pub fn lt(&self, rhs: &SciVal) -> EvalResult<SciVal> {
+         match self.compare(rhs)? {
+             cmp::Ordering::Less => Ok(Bool(true)),
+             cmp::Ordering::Equal |
+             cmp::Ordering::Greater => Ok(Bool(false))
+         }
+     }
+
+     pub fn gt(&self, rhs: &SciVal) -> EvalResult<SciVal> {
+         match self.compare(rhs)? {
+             cmp::Ordering::Less |
+             cmp::Ordering::Equal => Ok(Bool(false)),
+             cmp::Ordering::Greater => Ok(Bool(true))
+         }
+     }
+
+     pub fn ge(&self, rhs: &SciVal) -> EvalResult<SciVal> {
+         match self.compare(rhs)? {
+             cmp::Ordering::Less => Ok(Bool(false)),
+             cmp::Ordering::Equal |
+             cmp::Ordering::Greater => Ok(Bool(true))
+         }
+     }
+
+     pub fn le(&self, rhs: &SciVal) -> EvalResult<SciVal> {
+         match self.compare(rhs)? {
+             cmp::Ordering::Less |
+             cmp::Ordering::Equal => Ok(Bool(true)),
+             cmp::Ordering::Greater => Ok(Bool(false))
+         }
+     }
+
      pub fn negate(&self) -> EvalResult<SciVal> {
          if let Bool(b) = self { Ok(Bool(!b)) }
          else { Err(EvalError::TypeMismatch) }
@@ -246,7 +284,16 @@
      }
  }
 
- impl ops::Sub<SciVal> for SciVal {
+impl ops::Rem for SciVal {
+    type Output = EvalResult<SciVal>;
+    fn rem(self, rhs: SciVal) -> EvalResult<SciVal> {
+        if let (Number(n1), Number(n2)) = (self, rhs) {
+            Ok(Number((n1 % n2)?))
+        } else { Err(EvalError::TypeMismatch) }
+    }
+}
+
+impl ops::Sub<SciVal> for SciVal {
      type Output = EvalResult<SciVal>;
      fn sub(self, rhs: SciVal) -> EvalResult<SciVal> {
          self + (Number(number::Number::Int(-1))*rhs)?

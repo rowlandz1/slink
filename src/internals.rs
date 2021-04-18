@@ -13,6 +13,12 @@ use crate::matrix::*;
 use SciVal::*;
 
 pub fn get_internal(name: String) -> EvalResult<SciVal> {
+    match name.as_str() {
+        "pi" => { return Ok(Number(number::Number::Float(std::f64::consts::PI))); }
+        "e" => { return Ok(Number(number::Number::Float(std::f64::consts::E))); }
+        _ => {}
+    }
+
     let env = HashMap::new();
     let params: Vec<&str> = match name.as_str() {
         "det" |
@@ -43,7 +49,7 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "index" => vec!["0", "1", "2"],
         _ => { return Err(EvalError::UndefinedIdentifier(name)); }
     };
-    let params: Vec<String> = params.iter().map(|x| x.to_string()).collect();
+    let params: Vec<String> = params.into_iter().map(|x| x.to_string()).collect();
 
     Ok(Closure{
         env,

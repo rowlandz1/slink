@@ -51,7 +51,7 @@ pub enum SciVal {
         expr: Result<Box<AstExpr>, String>,
         next: Option<Box<SciVal>>,
     },
-    Macro(String),
+    Macro(String, Option<Box<SciVal>>),    // name, next
 }
 
 pub enum Arg {

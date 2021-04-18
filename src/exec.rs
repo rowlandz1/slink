@@ -61,6 +61,7 @@ impl Environ {
                 else if op.eq("*") { lhs * rhs }
                 else if op.eq("/") { lhs * rhs.inv()? }
                 else if op.eq("%") { lhs % rhs }
+                else if op.eq("**") { lhs.pow(rhs) }
                 else if op.eq(".") { lhs.fun_comp(rhs) }
                 else if op.eq("==") { lhs.equals(&rhs) }
                 else if op.eq("!=") { lhs.not_equals(&rhs) }
@@ -128,7 +129,7 @@ impl Environ {
             AstExpr::Num(n) => Ok(Number(number::Number::Float(n))),
             AstExpr::IntImag(n) => Ok(Number(number::Number::IntCmplx(0, n))),
             AstExpr::FloatImag(n) => Ok(Number(number::Number::FloatCmplx(0f64, n))),
-            AstExpr::Macro(name) => Ok(Macro(name)),
+            AstExpr::Macro(name) => Ok(Macro(name, None)),
             AstExpr::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())

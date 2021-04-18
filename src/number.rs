@@ -69,6 +69,16 @@ impl Number {
         }
     }
 
+    pub fn pow(self, rhs: Number) -> EvalResult<Number> {
+        match (self, rhs) {
+            (Int(n1), Int(n2)) => Ok(Float((n1 as f64).powi(n2))),
+            (Int(n1), Float(n2)) => Ok(Float((n1 as f64).powf(n2))),
+            (Float(n1), Int(n2)) => Ok(Float(n1.powi(n2))),
+            (Float(n1), Float(n2)) => Ok(Float(n1.powf(n2))),
+            _ => Err(EvalError::TypeMismatch)
+        }
+    }
+
     pub fn compare(&self, rhs: &Number) -> EvalResult<cmp::Ordering> {
         match (self, rhs) {
             (Int(n1), Int(n2)) => Ok(n1.cmp(n2)),

@@ -18,7 +18,7 @@
 
  impl SciVal {
      // Unpacks top-level tuple values from an argument list.
-     // Used by fun_app and macro_app
+     // Used by fun_app
      fn flatten_arg_list(args: Vec<Arg>) -> Vec<Arg> {
          let mut newargs: Vec<Arg> = Vec::new();
          for arg in args {
@@ -68,7 +68,7 @@
                  Ok(Closure{env, name, params, expr, next})
              }
          }
-         else if let Macro(name) = self {
+         else if let Macro(name, next) = self {
              let mut newargs: Vec<SciVal> = Vec::new();
              for arg in args.into_iter() {
                  match arg {
@@ -76,11 +76,16 @@
                      Arg::Val(v) => { newargs.push(*v); }
                  }
              }
-             macros::apply_to_macro(name, newargs)
+             let result = macros::apply_to_macro(name, newargs)?;
+             match next {
+                 Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                 None => Ok(result),
+             }
          }
          else { Err(EvalError::TypeMismatch) }
      }
 
+     // function composition. "self" should be a Closure or Macro
      pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {
          if let Closure{env, name, params, expr, next} = self {
              let newnext = match next {
@@ -88,6 +93,12 @@
                  None => other,
              };
              Ok(Closure{env, name, params, expr, next: Some(Box::new(newnext))})
+         } else if let Macro(name, next) = self {
+             let newnext = match next {
+                 Some(next) => next.fun_comp(other)?,
+                 None => other,
+             };
+             Ok(Macro(name, Some(Box::new(newnext))))
          } else {
              other.fun_app(vec![Arg::Val(Box::new(self))])
          }
@@ -102,6 +113,13 @@
                  let ret = matrix::matrix_inv(r, &mut v)?;
                  Ok(Matrix(r, c, ret))
              }
+             _ => Err(EvalError::TypeMismatch),
+         }
+     }
+
+     pub fn pow(self, rhs: SciVal) -> EvalResult<SciVal> {
+         match (self, rhs) {
+             (Number(n1), Number(n2)) => Ok(Number(n1.pow(n2)?)),
              _ => Err(EvalError::TypeMismatch),
          }
      }

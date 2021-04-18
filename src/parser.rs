@@ -36,13 +36,11 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
         Rule::expr2 |
         Rule::expr3 |
         Rule::expr4 |
-        Rule::expr6 => {
+        Rule::expr7 => {
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
-
             loop {
-                let op = inner_rules.next();
-                if let Some(op) = op {
+                if let Some(op) = inner_rules.next() {
                     let op = op.as_str().to_string();
                     let operand2 = get_ast_expr(inner_rules.next().unwrap());
                     ret = Binop(op, Box::new(ret), Box::new(operand2));
@@ -51,6 +49,18 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             ret
         }
         Rule::expr5 => {
+            let mut inner_rules = expr.into_inner().rev();
+            let mut ret = get_ast_expr(inner_rules.next().unwrap());
+            loop {
+                if let Some(op) = inner_rules.next() {
+                    let op = op.as_str().to_string();
+                    let operand2 = get_ast_expr(inner_rules.next().unwrap());
+                    ret = Binop(op, Box::new(operand2), Box::new(ret));
+                } else { break; }
+            }
+            ret
+        }
+        Rule::expr6 => {
             let mut inner_rules = expr.into_inner().rev();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -62,7 +72,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr7 => { // Function application
+        Rule::expr8 => { // Function application
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
@@ -82,7 +92,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr8 |
+        Rule::expr9 |
         Rule ::expr_base => {
             get_ast_expr(expr.into_inner().next().unwrap())
         }

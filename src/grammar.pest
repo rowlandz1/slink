@@ -14,8 +14,9 @@ BINOP1    = @{ "&&" }
 BINOP2    = @{ "==" | "!=" | "<=" | ">=" | "<" | ">" }
 BINOP3    = @{ "+" | "-" }
 BINOP4    = @{ "*" | "/" | "%" }
-UNOP5     = @{ "-" }
-BINOP6    = @{ "." }
+BINOP5    = @{ "**" }
+UNOP6     = @{ "-" }
+BINOP7    = @{ "." }
 QUEST     = @{ "?" }
 
 stmt = {
@@ -30,10 +31,11 @@ expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
 expr2 = { expr3 ~ (BINOP2 ~ expr3)* }
 expr3 = { expr4 ~ (BINOP3 ~ expr4)* }
 expr4 = { expr5 ~ (BINOP4 ~ expr5)* }
-expr5 = { UNOP5* ~ expr6 }
-expr6 = { expr7 ~ (BINOP6 ~ expr7)* }
-expr7 = { expr8 ~ ("(" ~ arg_list ~")")* }
-expr8 = { expr_base }
+expr5 = { expr6 ~ (BINOP5 ~ expr6)* }
+expr6 = { UNOP6* ~ expr7 }
+expr7 = { expr8 ~ (BINOP7 ~ expr8)* }
+expr8 = { expr9 ~ ("(" ~ arg_list ~")")* }
+expr9 = { expr_base }
 
 expr_base = {
     matrix
@@ -53,7 +55,7 @@ expr_base = {
 }
 
 matrix = { mat_row+ }
-mat_row = { "{" ~ expr+ ~ "}" }
+mat_row = { "{" ~ expr ~ (","? ~ expr)* ~ "}" }
 
 list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
 

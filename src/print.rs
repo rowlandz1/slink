@@ -37,7 +37,7 @@ impl ToString for SciVal {
             SciVal::Closure{params, ..} => {
                 format!("lam {} -> *", params.join(" "))
             }
-            SciVal::Macro(name) => {
+            SciVal::Macro(name, _) => {
                 format!("<macro: {}>", name)
             }
         }

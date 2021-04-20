@@ -34,7 +34,7 @@ expr4 = { expr5 ~ (BINOP4 ~ expr5)* }
 expr5 = { expr6 ~ (BINOP5 ~ expr6)* }
 expr6 = { UNOP6* ~ expr7 }
 expr7 = { expr8 ~ (BINOP7 ~ expr8)* }
-expr8 = { expr9 ~ ("(" ~ arg_list ~")")* }
+expr8 = { expr9 ~ ("(" ~ fun_args ~ ")")* }
 expr9 = { expr_base }
 
 expr_base = {
@@ -74,8 +74,8 @@ tuple = {
 
 bool = { "true" | "false" }
 
+fun_args = { kwarg_list | arg_list }
 arg_list = { (arg ~ ("," ~ arg)*)? }
-arg = {
-    QUEST
-  | expr
-}
+arg = { QUEST | expr }
+kwarg_list = { kwarg ~ ("," ~ kwarg)* }
+kwarg = { ID ~ "=" ~ expr }

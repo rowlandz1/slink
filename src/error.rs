@@ -15,6 +15,7 @@ pub enum EvalError {
     OutOfRange,
     DivideByZero,
     QuestionMarkMacroArg,
+    InvalidKeywordArgument,
     InResolvedExpr(Box<EvalError>, String),
 }
 
@@ -52,6 +53,9 @@ impl ToString for EvalError {
             }
             EvalError::QuestionMarkMacroArg => {
                 format!("Error: question mark syntax cannot be used when calling a macro")
+            }
+            EvalError::InvalidKeywordArgument => {
+                format!("Error: invalid keyword argument")
             }
             EvalError::InResolvedExpr(innererr, f) => {
                 format!("In resolved expression of {}\n{}", f, innererr.to_string())

@@ -34,8 +34,12 @@ impl ToString for SciVal {
                 let vstrings: Vec<String> = v.iter().map(|x| x.to_string()).collect();
                 format!("({})", vstrings.join(", "))
             }
-            SciVal::Closure{params, ..} => {
-                format!("lam {} -> *", params.join(" "))
+            SciVal::Closure{params, app, ..} => {
+                let mut appstring = String::new();
+                for (key, val) in app {
+                    appstring = format!("{} {}={}", appstring, key, val.to_string());
+                }
+                format!("lam {}{} -> *", params.join(" "), appstring)
             }
             SciVal::Macro(name, _) => {
                 format!("<macro: {}>", name)

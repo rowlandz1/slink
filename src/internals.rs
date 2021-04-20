@@ -55,6 +55,7 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         env,
         name: None,
         params,
+        app: HashMap::new(),
         expr: Err(name),
         next: None
     })

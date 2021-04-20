@@ -7,6 +7,7 @@
 
  use core::ops;
  use core::cmp;
+ use std::collections::HashMap;
  use crate::ast::*;
  use SciVal::*;
  use crate::internals;
@@ -32,11 +33,11 @@
          newargs
      }
 
-     // Function application. "self" should be a Closure or a Macro,
-     // otherwise a a type error will be returned.
+     // Function application with a normal argument list. "self" should be a Closure
+     // or a Macro, otherwise a a type error will be returned.
      pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
          let args = Self::flatten_arg_list(args);
-         if let Closure{mut env, name, mut params, expr, next} = self {
+         if let Closure{mut env, name, mut params, mut app, expr, next} = self {
              if params.len() < args.len() {
                  return Err(EvalError::ArityMismatch);
              }
@@ -44,10 +45,11 @@
              for (param, arg) in appliedparams.iter().zip(args) {
                  match arg {
                      Arg::Question => { params.push(param.clone()); }
-                     Arg::Val(arg) => { env.insert(param.clone(), *arg.clone()); }
+                     Arg::Val(arg) => { app.insert(param.clone(), *arg.clone()); }
                  }
              }
              if params.len() == 0 {
+                 env.extend(app.into_iter());
                  let result = match expr {
                      Ok(expr) => Environ::from_map(env).evaluate(*expr),
                      Err(name) => internals::apply_to_internal(name, env),
@@ -65,7 +67,7 @@
                      None => Ok(result),
                  }
              } else {
-                 Ok(Closure{env, name, params, expr, next})
+                 Ok(Closure{env, name, params, app, expr, next})
              }
          }
          else if let Macro(name, next) = self {
@@ -85,14 +87,53 @@
          else { Err(EvalError::TypeMismatch) }
      }
 
+     // Function application with a keyword list. "self" should be a Closure.
+     pub fn fun_kw_app(self, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
+          if let Closure{mut env, name, params, mut app, expr, next} = self {
+              let mut newparams: Vec<String> = Vec::new();
+              for param in params {
+                  if let Some(v) = args.remove(&param) { app.insert(param, v); }
+                  else { newparams.push(param); }
+              }
+              let params = newparams;
+              for (key, val) in args {
+                  if !app.contains_key(&key) { return Err(EvalError::InvalidKeywordArgument); }
+                  app.insert(key, val);
+              }
+
+              if params.len() == 0 {
+                  env.extend(app.into_iter());
+                  let result = match expr {
+                      Ok(expr) => Environ::from_map(env).evaluate(*expr),
+                      Err(name) => internals::apply_to_internal(name, env),
+                  };
+                  let result = match result {
+                      Ok(v) => v,
+                      Err(e) => {
+                          if let Some(name) = name {
+                              return Err(EvalError::InResolvedExpr(Box::new(e), name));
+                          } else { return Err(e); }
+                      }
+                  };
+                  match next {
+                      Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                      None => Ok(result),
+                  }
+              } else {
+                  Ok(Closure{env, name, params, app, expr, next})
+              }
+
+          } else { Err(EvalError::TypeMismatch) }
+     }
+
      // function composition. "self" should be a Closure or Macro
      pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {
-         if let Closure{env, name, params, expr, next} = self {
+         if let Closure{env, name, params, app, expr, next} = self {
              let newnext = match next {
                  Some(next) => next.fun_comp(other)?,
                  None => other,
              };
-             Ok(Closure{env, name, params, expr, next: Some(Box::new(newnext))})
+             Ok(Closure{env, name, params, app, expr, next: Some(Box::new(newnext))})
          } else if let Macro(name, next) = self {
              let newnext = match next {
                  Some(next) => next.fun_comp(other)?,

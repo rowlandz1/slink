@@ -5,6 +5,7 @@
  * get_ast_expr: parses into a AstExpr
  */
 
+use std::collections::HashMap;
 use crate::Rule;
 use pest::iterators::Pair;
 use crate::ast::*;
@@ -77,17 +78,17 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
             loop {
-                if let Some(arglist) = inner_rules.next() {
-                    let mut arg_vec: Vec<AstArg> = vec![];
-                    for arg in arglist.into_inner() {
-                        let a = arg.into_inner().next().unwrap();
-                        match a.as_rule() {
-                            Rule::QUEST => arg_vec.push(AstArg::Question),
-                            Rule::expr => arg_vec.push(AstArg::Expr(Box::new(get_ast_expr(a)))),
-                            _ => unreachable!()
+                if let Some(funargs) = inner_rules.next() {
+                    let funargs = funargs.into_inner().next().unwrap();
+                    match funargs.as_rule() {
+                        Rule::arg_list => {
+                            ret = FunApp(Box::new(ret), parse_arg_list(funargs));
                         }
+                        Rule::kwarg_list => {
+                            ret = FunKwApp(Box::new(ret), parse_kwarg_list(funargs));
+                        }
+                        _ => unreachable!()
                     }
-                    ret = FunApp(Box::new(ret), arg_vec);
                 } else { break; }
             }
             ret
@@ -178,4 +179,28 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
         }
         _ => unreachable!()
     }
+}
+
+fn parse_arg_list(arg_list: Pair<Rule>) -> Vec<AstArg> {
+    let mut arg_vec: Vec<AstArg> = vec![];
+    for arg in arg_list.into_inner() {
+        let a = arg.into_inner().next().unwrap();
+        match a.as_rule() {
+            Rule::QUEST => arg_vec.push(AstArg::Question),
+            Rule::expr => arg_vec.push(AstArg::Expr(Box::new(get_ast_expr(a)))),
+            _ => unreachable!()
+        }
+    }
+    arg_vec
+}
+
+fn parse_kwarg_list(kwarg_list: Pair<Rule>) -> HashMap<String, AstExpr> {
+    let mut kwarg_map: HashMap<String, AstExpr> = HashMap::new();
+    for arg in kwarg_list.into_inner() {
+        let mut inner_rules = arg.into_inner();
+        let id = inner_rules.next().unwrap().as_str().to_string();
+        let expr = get_ast_expr(inner_rules.next().unwrap());
+        kwarg_map.insert(id, expr);
+    }
+    kwarg_map
 }

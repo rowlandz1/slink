@@ -18,6 +18,7 @@ pub enum AstExpr {
     Unop(String, Box<AstExpr>),
     Lambda(Vec<String>, Box<AstExpr>),
     FunApp(Box<AstExpr>, Vec<AstArg>),
+    FunKwApp(Box<AstExpr>, HashMap<String, AstExpr>),
     Macro(String),
     Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
@@ -45,13 +46,14 @@ pub enum SciVal {
     List(Vec<SciVal>),
     Tuple(Vec<SciVal>),
     Closure {
-        env: HashMap<String, SciVal>,
-        name: Option<String>,
-        params: Vec<String>,
-        expr: Result<Box<AstExpr>, String>,
-        next: Option<Box<SciVal>>,
+        env: HashMap<String, SciVal>,           // environment in which closure was defined
+        name: Option<String>,                   // closure name (for error tracing and recursion)
+        params: Vec<String>,                    // unapplied parameter list
+        app: HashMap<String, SciVal>,           // applied parameters
+        expr: Result<Box<AstExpr>, String>,     // inner expression (or string for internal functions)
+        next: Option<Box<SciVal>>,              // if Some(v), then this closure is the first in a composition
     },
-    Macro(String, Option<Box<SciVal>>),    // name, next
+    Macro(String, Option<Box<SciVal>>),         // name, next
 }
 
 pub enum Arg {

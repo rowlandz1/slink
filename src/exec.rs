@@ -34,9 +34,9 @@ impl Environ {
         match stmt {
             AstStmt::Assign(v, e) => {
                 match self.evaluate(*e) {
-                    Ok(Closure{env, params, expr, next, ..}) => {
+                    Ok(Closure{env, params, app, expr, next, ..}) => {
                         let name = Some(v.clone());
-                        self.var_store.insert(v, Closure{env, name, params, expr, next});
+                        self.var_store.insert(v, Closure{env, name, params, app, expr, next});
                     }
                     Ok(evaled) => { self.var_store.insert(v, evaled); }
                     Err(e) => eprintln!("{}", e.to_string()),
@@ -102,6 +102,7 @@ impl Environ {
                     env: self.to_owned().var_store,
                     name: None,
                     params,
+                    app: HashMap::new(),
                     expr: Ok(inner_expr),
                     next: None
                 })
@@ -123,6 +124,14 @@ impl Environ {
                 }
                 let f = self.evaluate(*f)?;
                 f.fun_app(args_evaled)
+            }
+            AstExpr::FunKwApp(f, args) => {
+                let mut args_evaled: HashMap<String, SciVal> = HashMap::new();
+                for (argname, arg) in args {
+                    args_evaled.insert(argname, self.evaluate(arg)?);
+                }
+                let f = self.evaluate(*f)?;
+                f.fun_kw_app(args_evaled)
             }
             AstExpr::Bool(b) => Ok(Bool(b)),
             AstExpr::Int(n) => Ok(Number(number::Number::Int(n))),

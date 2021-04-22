@@ -129,6 +129,10 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             let mut param_vec: Vec<String> = vec![];
             let mut inner_rules = expr.into_inner();
             for pair in inner_rules.next().unwrap().into_inner() {
+                let s = pair.as_str().to_string();
+                if param_vec.contains(&s) {
+                    panic!("Cannot bind same variable twice");
+                }
                 param_vec.push(pair.as_str().to_string());
             }
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());

@@ -5,6 +5,7 @@
 
 use crate::number;
 use crate::error::*;
+use crate::ast::Slice;
 
 pub fn matrix_det(d: usize, v: &Vec<number::Number>) -> number::Number {
     if d == 1 { return v[0]; }
@@ -57,4 +58,22 @@ pub fn matrix_inv(d: usize, v: &mut Vec<number::Number>) -> EvalResult<Vec<numbe
         }
     }
     Ok(ret)
+}
+
+// slices the matrix. Always returns a matrix even if it contains only one element
+pub fn matrix_slice(_r: usize, c: usize, v: &[number::Number], rslice: Slice, cslice: Slice) -> (usize, usize, Vec<number::Number>) {
+    let (rlow, rhigh) = match rslice {
+        Slice::Single(i) => (i, i+1),
+        Slice::Range(i, j) => (i, j),
+    };
+    let (clow, chigh) = match cslice {
+        Slice::Single(i) => (i, i+1),
+        Slice::Range(i, j) => (i, j)
+    };
+    let v: &[number::Number] = &v[rlow*c..rhigh*c];
+    let mut ret: Vec<number::Number> = Vec::new();
+    for i in 0..v.len() {
+        if i % c >= clow && i % c < chigh { ret.push(v[i]); }
+    }
+    (rhigh - rlow, chigh - clow, ret)
 }

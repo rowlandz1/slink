@@ -8,11 +8,11 @@ pub enum EvalError {
     InvalidMatrixShape,
     IncompatibleMatrixShapes,
     NoninvertableMatrix,
-    IndexOutOfBounds,
     ArityMismatch,
     TypeMismatch,
     UndefinedIdentifier(String),
     OutOfRange,
+    InvalidSlice,
     DivideByZero,
     QuestionMarkMacroArg,
     InvalidKeywordArgument,
@@ -33,9 +33,6 @@ impl ToString for EvalError {
             EvalError::NoninvertableMatrix => {
                 format!("Error: noninvertable matrix")
             }
-            EvalError::IndexOutOfBounds => {
-                format!("Error: index out of bounds")
-            }
             EvalError::ArityMismatch => {
                 format!("Error: arity mismatch")
             }
@@ -47,6 +44,9 @@ impl ToString for EvalError {
             }
             EvalError::OutOfRange => {
                 format!("Error: out of range")
+            }
+            EvalError::InvalidSlice => {
+                format!("Error: invalid slice")
             }
             EvalError::DivideByZero => {
                 format!("Error: divide by zero")

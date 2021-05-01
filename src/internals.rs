@@ -4,6 +4,7 @@
  */
 
 use std::collections::HashMap;
+use core::cmp;
 use crate::ast::SciVal;
 use crate::ast::Arg;
 use crate::error::EvalError;
@@ -28,6 +29,8 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "abs" |
         "sqrt" |
         "conj" |
+        "max" |
+        "argmax" |
         "len" => vec!["0"],
         "op+" |
         "op-" |
@@ -45,8 +48,7 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "range" |
         "push" |
         "zip" => vec!["0", "1"],
-        "reduce" |
-        "index" => vec!["0", "1", "2"],
+        "reduce" => vec!["0", "1", "2"],
         _ => { return Err(EvalError::UndefinedIdentifier(name)); }
     };
     let params: Vec<String> = params.into_iter().map(|x| x.to_string()).collect();
@@ -64,25 +66,7 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
 // Applies the arguments to the internal function.
 // NOTE: Arity mismatches need to be checked BEFORE calling this function.
 pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> EvalResult<SciVal> {
-    if intfun.eq("index") {
-        let index_c = match args.remove("2").unwrap() {
-            Number(number::Number::Int(n)) => n as usize,
-            _ => { return Err(EvalError::TypeMismatch); }
-        };
-        let index_r = match args.remove("1").unwrap() {
-            Number(number::Number::Int(n)) => n as usize,
-            _ => { return Err(EvalError::TypeMismatch); }
-        };
-        let (mrows, mcols, vals) = match args.remove("0").unwrap() {
-            Matrix(r, c, v) => (r, c, v),
-            _ => { return Err(EvalError::TypeMismatch); }
-        };
-
-        if index_r >= mrows || index_c >= mcols {
-            return Err(EvalError::IndexOutOfBounds);
-        }
-        Ok(Number(vals[index_r * mcols + index_c]))
-    } else if intfun.eq("reduce") {
+    if intfun.eq("reduce") {
         let arg2 = args.remove("2").unwrap();
         let arg1 = args.remove("1").unwrap();
         let arg0 = if let List(v) = args.remove("0").unwrap() {v}
@@ -130,6 +114,33 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("conj") {
         args.remove("0").unwrap().conjugate()
+    } else if intfun.eq("max") {
+        let arg = args.remove("0").unwrap();
+        if let List(v) = arg {
+            let mut m: SciVal = v[0].clone();
+            for elem in v {
+                if let Bool(true) = elem.gt(&m)? { m = elem; }
+            }
+            Ok(m)
+        } else if let Matrix(_, _, v) = arg {
+            let mut m: number::Number = v[0];
+            for elem in v {
+                if let cmp::Ordering::Greater = elem.compare(&m)? { m = elem; }
+            }
+            Ok(Number(m))
+        } else { return Err(EvalError::TypeMismatch); }
+    } else if intfun.eq("argmax") {
+        let arg = args.remove("0").unwrap();
+        if let List(v) = arg {
+            let mut m: SciVal = v[0].clone();
+            let mut i: usize = 0;
+            let mut j: usize = 0;
+            for elem in v {
+                if let Bool(true) = elem.gt(&m)? { m = elem; i = j; }
+                j += 1;
+            }
+            Ok(Number(number::Number::Int(i as i32)))
+        } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("len") {
         if let List(v) = args.remove("0").unwrap() {
             Ok(Number(number::Number::Int(v.len() as i32)))

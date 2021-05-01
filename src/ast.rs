@@ -16,6 +16,8 @@ pub enum AstStmt {
 pub enum AstExpr {
     Binop(String, Box<AstExpr>, Box<AstExpr>),
     Unop(String, Box<AstExpr>),
+    ListIndex(Box<AstExpr>, AstSlice),
+    MatrixIndex(Box<AstExpr>, AstSlice, AstSlice),
     Lambda(Vec<String>, Box<AstExpr>),
     FunApp(Box<AstExpr>, Vec<AstArg>),
     FunKwApp(Box<AstExpr>, HashMap<String, AstExpr>),
@@ -36,6 +38,12 @@ pub enum AstExpr {
 pub enum AstArg {
     Question,
     Expr(Box<AstExpr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum AstSlice {
+    Single(Box<AstExpr>),
+    Range(Option<Box<AstExpr>>, Option<Box<AstExpr>>),
 }
 
 #[derive(Debug, Clone)]
@@ -60,3 +68,9 @@ pub enum Arg {
     Question,
     Val(Box<SciVal>),
 }
+
+#[derive(Debug)]
+ pub enum Slice {
+     Single(usize),
+     Range(usize, usize),
+ }

@@ -1,5 +1,6 @@
 alpha = _{ 'a'..'z' | 'A'..'Z' }
 digit = _{ '0'..'9' }
+rangetoken = _{ ":" }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
 ID        = @{ alpha ~ (alpha | digit)* }
@@ -34,7 +35,8 @@ expr4 = { expr5 ~ (BINOP4 ~ expr5)* }
 expr5 = { expr6 ~ (BINOP5 ~ expr6)* }
 expr6 = { UNOP6* ~ expr7 }
 expr7 = { expr8 ~ (BINOP7 ~ expr8)* }
-expr8 = { expr9 ~ ("(" ~ fun_args ~ ")")* }
+//expr8 = { expr9 ~ ("(" ~ fun_args ~ ")")* }
+expr8 = { expr9 ~ paren_operator* }
 expr9 = { expr_base }
 
 expr_base = {
@@ -74,8 +76,19 @@ tuple = {
 
 bool = { "true" | "false" }
 
-fun_args = { kwarg_list | arg_list }
+paren_operator = {
+    "(" ~ kwarg_list ~ ")"
+  | "(" ~ arg_list ~ ")"
+  | "[" ~ slice ~ ("," ~ slice)? ~ "]"
+}
+
 arg_list = { (arg ~ ("," ~ arg)*)? }
 arg = { QUEST | expr }
 kwarg_list = { kwarg ~ ("," ~ kwarg)* }
 kwarg = { ID ~ "=" ~ expr }
+
+slice = { slice_ny | slice_nn | slice_yy | slice_yn | expr }
+slice_ny = { rangetoken ~ expr }
+slice_nn = { rangetoken }
+slice_yy = { expr ~ rangetoken ~ expr }
+slice_yn = { expr ~ rangetoken }

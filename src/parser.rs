@@ -73,19 +73,29 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
             }
             ret
         }
-        Rule::expr8 => { // Function application
+        Rule::expr8 => { // Function application & indexing
             let mut inner_rules = expr.into_inner();
             let mut ret = get_ast_expr(inner_rules.next().unwrap());
 
             loop {
-                if let Some(funargs) = inner_rules.next() {
-                    let funargs = funargs.into_inner().next().unwrap();
-                    match funargs.as_rule() {
+                if let Some(paren_operator) = inner_rules.next() {
+                    let mut paren_inner_rules = paren_operator.into_inner();
+                    let inside = paren_inner_rules.next().unwrap();
+                    match inside.as_rule() {
                         Rule::arg_list => {
-                            ret = FunApp(Box::new(ret), parse_arg_list(funargs));
+                            ret = FunApp(Box::new(ret), parse_arg_list(inside));
                         }
                         Rule::kwarg_list => {
-                            ret = FunKwApp(Box::new(ret), parse_kwarg_list(funargs));
+                            ret = FunKwApp(Box::new(ret), parse_kwarg_list(inside));
+                        }
+                        Rule::slice => {
+                            let slice1 = parse_slice(inside);
+                            if let Some(inside) = paren_inner_rules.next() {
+                                let slice2 = parse_slice(inside);
+                                ret = MatrixIndex(Box::new(ret), slice1, slice2);
+                            } else {
+                                ret = ListIndex(Box::new(ret), slice1)
+                            }
                         }
                         _ => unreachable!()
                     }
@@ -207,4 +217,31 @@ fn parse_kwarg_list(kwarg_list: Pair<Rule>) -> HashMap<String, AstExpr> {
         kwarg_map.insert(id, expr);
     }
     kwarg_map
+}
+
+fn parse_slice(slice: Pair<Rule>) -> AstSlice {
+    let a = slice.into_inner().next().unwrap();
+    match a.as_rule() {
+        Rule::slice_ny => {
+            let upper = get_ast_expr(a.into_inner().next().unwrap());
+            AstSlice::Range(None, Some(Box::new(upper)))
+        }
+        Rule::slice_nn => {
+            AstSlice::Range(None, None)
+        }
+        Rule::slice_yy => {
+            let mut inner_rules = a.into_inner();
+            let lower = get_ast_expr(inner_rules.next().unwrap());
+            let upper = get_ast_expr(inner_rules.next().unwrap());
+            AstSlice::Range(Some(Box::new(lower)), Some(Box::new(upper)))
+        }
+        Rule::slice_yn => {
+            let lower = get_ast_expr(a.into_inner().next().unwrap());
+            AstSlice::Range(Some(Box::new(lower)), None)
+        }
+        Rule::expr => {
+            AstSlice::Single(Box::new(get_ast_expr(a)))
+        }
+        _ => unreachable!()
+    }
 }

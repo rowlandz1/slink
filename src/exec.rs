@@ -8,6 +8,7 @@ use crate::ast::*;
 use SciVal::*;
 use crate::internals;
 use crate::number;
+use crate::matrix;
 use crate::error::*;
 
 #[derive(Debug)]
@@ -78,6 +79,30 @@ impl Environ {
                 if op.eq("-") { -inner }
                 else { panic!("Unrecognized unary operator"); }
             }
+            AstExpr::ListIndex(e, slice) => {
+                let mut v = if let List(l) = self.evaluate(*e)? { l }
+                            else { return Err(EvalError::TypeMismatch); };
+                match self.evaluate_slice(slice, v.len())? {
+                    Slice::Single(i) => Ok(v.remove(i)),
+                    Slice::Range(i, j) => {
+                        v.truncate(j);
+                        Ok(List(v.split_off(i)))
+                    }
+                }
+            }
+            AstExpr::MatrixIndex(e, rslice, cslice) => {
+                let (r, c, v) = if let Matrix(r, c, v) = self.evaluate(*e)? { (r, c, v) }
+                                else { return Err(EvalError::TypeMismatch); };
+
+                let rslice = self.evaluate_slice(rslice, r)?;
+                let cslice = self.evaluate_slice(cslice, c)?;
+                if let (Slice::Single(i), Slice::Single(j)) = (&rslice, &cslice) {
+                    Ok(Number(v[i*r + j]))
+                } else {
+                    let (r, c, v) = matrix::matrix_slice(r, c, v.as_slice(), rslice, cslice);
+                    Ok(Matrix(r, c, v))
+                }
+            }
             AstExpr::Matrix(r, c, v) => {
                 let mut vret: Vec<number::Number> = vec![];
                 for subexpr in v {
@@ -145,6 +170,48 @@ impl Environ {
                 } else {
                     internals::get_internal(x)
                 }
+            }
+        }
+    }
+
+    // Evaluates a slice object. "len" is used for negative indexing purposes.
+    pub fn evaluate_slice(&mut self, slice: AstSlice, len: usize) -> EvalResult<Slice> {
+        match slice {
+            AstSlice::Single(i) => {
+                let i = if let Number(number::Number::Int(i)) = self.evaluate(*i)? { i }
+                        else { return Err(EvalError::TypeMismatch); };
+                let i = if i >= 0 { i } else { len as i32 + i };
+                if i < 0 || i >= len as i32 { return Err(EvalError::OutOfRange); }
+                Ok(Slice::Single(i as usize))
+            }
+            AstSlice::Range(Some(i), Some(j)) => {
+                let i = if let Number(number::Number::Int(i)) = self.evaluate(*i)? { i }
+                        else { return Err(EvalError::TypeMismatch); };
+                let i = if i >= 0 { i } else { len as i32 + i };
+                if i < 0 || i >= len as i32 { return Err(EvalError::InvalidSlice); }
+                let j = if let Number(number::Number::Int(j)) = self.evaluate(*j)? { j }
+                        else { return Err(EvalError::TypeMismatch); };
+                let j = if j >= 0 { j } else { len as i32 + j };
+                if j < 0 || j >= len as i32 { return Err(EvalError::InvalidSlice); }
+                if j < i { return Err(EvalError::InvalidSlice); }
+                Ok(Slice::Range(i as usize, j as usize))
+            }
+            AstSlice::Range(None, Some(j)) => {
+                let j = if let Number(number::Number::Int(j)) = self.evaluate(*j)? { j }
+                        else { return Err(EvalError::TypeMismatch); };
+                let j = if j >= 0 { j } else { len as i32 + j };
+                if j < 0 || j >= len as i32 { return Err(EvalError::InvalidSlice); }
+                Ok(Slice::Range(0, j as usize))
+            }
+            AstSlice::Range(Some(i), None) => {
+                let i = if let Number(number::Number::Int(i)) = self.evaluate(*i)? { i }
+                        else { return Err(EvalError::TypeMismatch); };
+                let i = if i >= 0 { i } else { len as i32 + i };
+                if i < 0 || i >= len as i32 { return Err(EvalError::InvalidSlice); }
+                Ok(Slice::Range(i as usize, len))
+            }
+            AstSlice::Range(None, None) => {
+                Ok(Slice::Range(0, len))
             }
         }
     }

@@ -164,6 +164,11 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AstExpr {
         }
         Rule::tuple => Tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
         Rule::bool => Bool(expr.as_str().eq("true")),
+        Rule::string => {
+            let s = expr.as_str();
+            let s = handle_escape_sequences(&s[1..s.len()-1]);
+            Str(s)
+        }
         Rule::ID |
         Rule::OPID => {
             Id(expr.as_str().to_string())
@@ -244,4 +249,11 @@ fn parse_slice(slice: Pair<Rule>) -> AstSlice {
         }
         _ => unreachable!()
     }
+}
+
+fn handle_escape_sequences(s: &str) -> String {
+    s.replace("\\t", "\t")
+    .replace("\\n", "\n")
+    .replace("\\\"", "\"")
+    .replace("\\\'", "\'")
 }

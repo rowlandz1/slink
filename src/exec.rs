@@ -80,14 +80,26 @@ impl Environ {
                 else { panic!("Unrecognized unary operator"); }
             }
             AstExpr::ListIndex(e, slice) => {
-                let mut v = if let List(l) = self.evaluate(*e)? { l }
-                            else { return Err(EvalError::TypeMismatch); };
-                match self.evaluate_slice(slice, v.len())? {
-                    Slice::Single(i) => Ok(v.remove(i)),
-                    Slice::Range(i, j) => {
-                        v.truncate(j);
-                        Ok(List(v.split_off(i)))
+                match self.evaluate(*e)? {
+                    List(mut v) => {
+                        match self.evaluate_slice(slice, v.len())? {
+                            Slice::Single(i) => Ok(v.remove(i)),
+                            Slice::Range(i, j) => {
+                                v.truncate(j);
+                                Ok(List(v.split_off(i)))
+                            }
+                        }
                     }
+                    Str(mut s) => {
+                        match self.evaluate_slice(slice, s.len())? {
+                            Slice::Single(i) => Ok(Str(s.chars().nth(i).unwrap().to_string())),
+                            Slice::Range(i, j) => {
+                                s.truncate(j);
+                                Ok(Str(s.split_off(i)))
+                            }
+                        }
+                    }
+                    _ => Err(EvalError::TypeMismatch)
                 }
             }
             AstExpr::MatrixIndex(e, rslice, cslice) => {
@@ -122,6 +134,7 @@ impl Environ {
                 for x in v { newv.push(self.evaluate(x)?); }
                 Ok(Tuple(newv))
             }
+            AstExpr::Str(s) => Ok(Str(s)),
             AstExpr::Lambda(params, inner_expr) => {
                 Ok(Closure{
                     env: self.to_owned().var_store,

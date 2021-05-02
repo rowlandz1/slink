@@ -294,6 +294,9 @@
                  v1.append(&mut v2);
                  Ok(List(v1))
              }
+             (Str(s1), Str(s2)) => {
+                 Ok(Str(format!("{}{}", s1, s2)))
+             }
              _ => Err(EvalError::TypeMismatch)
          }
      }
@@ -337,6 +340,15 @@
                      vret.append(&mut v.to_vec());
                  }
                  Ok(List(vret))
+             }
+             (Str(s), Number(number::Number::Int(n))) => {
+                 if n < 0 { return Err(EvalError::OutOfRange); }
+                 let n = n as usize;
+                 let mut sret = String::new();
+                 for _ in 0..n {
+                     sret.push_str(&s);
+                 }
+                 Ok(Str(sret))
              }
              _ => Err(EvalError::TypeMismatch)
          }

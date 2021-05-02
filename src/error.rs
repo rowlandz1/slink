@@ -10,6 +10,7 @@ pub enum EvalError {
     NoninvertableMatrix,
     ArityMismatch,
     TypeMismatch,
+    TypeConversionError,
     UndefinedIdentifier(String),
     OutOfRange,
     InvalidSlice,
@@ -38,6 +39,9 @@ impl ToString for EvalError {
             }
             EvalError::TypeMismatch => {
                 format!("Error: type mismatch")
+            }
+            EvalError::TypeConversionError => {
+                format!("Error: type conversion error")
             }
             EvalError::UndefinedIdentifier(s) => {
                 format!("Error: undefined identifier '{}'", s)

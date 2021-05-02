@@ -27,6 +27,7 @@ pub enum AstExpr {
     List(Vec<AstExpr>),
     Tuple(Vec<AstExpr>),
     Bool(bool),
+    Str(String),
     Int(i32),
     Num(f64),
     IntImag(i32),
@@ -53,6 +54,7 @@ pub enum SciVal {
     Matrix(usize, usize, Vec<number::Number>),  // numrows, numcols, index = row*numcols + col
     List(Vec<SciVal>),
     Tuple(Vec<SciVal>),
+    Str(String),
     Closure {
         env: HashMap<String, SciVal>,           // environment in which closure was defined
         name: Option<String>,                   // closure name (for error tracing and recursion)

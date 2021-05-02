@@ -41,6 +41,9 @@ impl ToString for SciVal {
                 }
                 format!("lam {}{} -> *", params.join(" "), appstring)
             }
+            SciVal::Str(s) => {
+                format!("'{}'", s.clone())
+            }
             SciVal::Macro(name, _) => {
                 format!("<macro: {}>", name)
             }

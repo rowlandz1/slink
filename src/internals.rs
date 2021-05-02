@@ -31,7 +31,9 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "conj" |
         "max" |
         "argmax" |
-        "len" => vec!["0"],
+        "len" |
+        "reverse" |
+        "num" => vec!["0"],
         "op+" |
         "op-" |
         "op*" |
@@ -47,7 +49,9 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "filter" |
         "range" |
         "push" |
-        "zip" => vec!["0", "1"],
+        "zip" |
+        "split" |
+        "join" => vec!["0", "1"],
         "reduce" => vec!["0", "1", "2"],
         _ => { return Err(EvalError::UndefinedIdentifier(name)); }
     };
@@ -142,9 +146,28 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(Number(number::Number::Int(i as i32)))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("len") {
-        if let List(v) = args.remove("0").unwrap() {
-            Ok(Number(number::Number::Int(v.len() as i32)))
-        } else { return Err(EvalError::TypeMismatch); }
+        match args.remove("0").unwrap() {
+            List(v) => Ok(Number(number::Number::Int(v.len() as i32))),
+            Str(s) => Ok(Number(number::Number::Int(s.len() as i32))),
+            _ => Err(EvalError::TypeMismatch)
+        }
+    } else if intfun.eq("reverse") {
+        match args.remove("0").unwrap() {
+            List(mut v) => { v.reverse(); Ok(List(v)) }
+            Str(s) => Ok(Str(s.chars().rev().collect())),
+            _ => Err(EvalError::TypeMismatch)
+        }
+    } else if intfun.eq("num") {
+        match args.remove("0").unwrap() {
+            Str(s) => {
+                if let Ok(n) = s.parse::<i32>() {
+                    Ok(Number(number::Number::Int(n)))
+                } else if let Ok(n) = s.parse::<f64>() {
+                    Ok(Number(number::Number::Float(n)))
+                } else { Err(EvalError::TypeConversionError) }
+            }
+            _ => Err(EvalError::TypeMismatch)
+        }
     } else if intfun.eq("map") {
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
@@ -202,6 +225,30 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Tuple(vec![x, y])
         }).collect();
         Ok(List(zipped))
+    } else if intfun.eq("split") {
+        let arg1 = match args.remove("1").unwrap() {
+            Str(v) => v,
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
+        let arg0 = match args.remove("0").unwrap() {
+            Str(v) => v,
+            _ => { return Err(EvalError::TypeMismatch); }
+        };
+        let mut ret: Vec<SciVal> = Vec::new();
+        for part in arg0.split(arg1.as_str()) {
+            ret.push(Str(part.to_string()));
+        }
+        Ok(List(ret))
+    } else if intfun.eq("join") {
+        let arg1 = if let Str(s) = args.remove("1").unwrap() { s }
+                   else { return Err(EvalError::TypeMismatch); };
+        let arg0 = if let List(v) = args.remove("0").unwrap() { v }
+                   else { return Err(EvalError::TypeMismatch); };
+        let mut strings: Vec<String> = Vec::new();
+        for val in arg0 {
+            if let Str(s) = val { strings.push(s); } else { return Err(EvalError::TypeMismatch); }
+        }
+        Ok(Str(strings.join(arg1.as_str())))
     } else if intfun.eq("op+") {
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();

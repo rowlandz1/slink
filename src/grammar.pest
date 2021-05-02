@@ -47,6 +47,7 @@ expr_base = {
   | tuple
   | "(" ~ expr ~ ")"
   | bool
+  | string
   | FLOATIMAG
   | INTIMAG
   | FLOAT
@@ -75,6 +76,11 @@ tuple = {
 }
 
 bool = { "true" | "false" }
+
+string = @{
+    "'" ~ ("\\'" | (!"'" ~ ANY))* ~ "'"
+  | "\"" ~ ("\\\"" | (!"\"" ~ ANY)* ~ "\"")
+}
 
 paren_operator = {
     "(" ~ kwarg_list ~ ")"

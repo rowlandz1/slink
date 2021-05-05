@@ -31,6 +31,7 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
         "conj" |
         "max" |
         "argmax" |
+        "argmin" |
         "len" |
         "reverse" |
         "num" => vec!["0"],
@@ -141,6 +142,18 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             let mut j: usize = 0;
             for elem in v {
                 if let Bool(true) = elem.gt(&m)? { m = elem; i = j; }
+                j += 1;
+            }
+            Ok(Number(number::Number::Int(i as i32)))
+        } else { return Err(EvalError::TypeMismatch); }
+    } else if intfun.eq("argmin") {
+        let arg = args.remove("0").unwrap();
+        if let List(v) = arg {
+            let mut m: SciVal = v[0].clone();
+            let mut i: usize = 0;
+            let mut j: usize = 0;
+            for elem in v {
+                if let Bool(true) = elem.lt(&m)? { m = elem; i = j; }
                 j += 1;
             }
             Ok(Number(number::Number::Int(i as i32)))

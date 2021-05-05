@@ -34,7 +34,7 @@
      }
 
      // Function application with a normal argument list. "self" should be a Closure
-     // or a Macro, otherwise a a type error will be returned.
+     // a Macro, or a slice, otherwise a a type error will be returned.
      pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
          let args = Self::flatten_arg_list(args);
          if let Closure{mut env, name, mut params, mut app, expr, next} = self {
@@ -84,6 +84,30 @@
                  None => Ok(result),
              }
          }
+         else if let ListSlice(slice, next) = self {
+             if args.len() != 1 { panic!("Error, ListSlice was applied to wrong number of arguments"); }
+             let v = match args.into_iter().next().unwrap() {
+                 Arg::Question => panic!("Error, ListSlice cannot accept question mark arguments"),
+                 Arg::Val(v) => v,
+             };
+             let result = v.list_slice(slice)?;
+             match next {
+                 Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                 None => Ok(result),
+             }
+         }
+         else if let MatrixSlice(slice1, slice2, next) = self {
+             if args.len() != 1 { panic!("Error, MatrixSlice was applied to wrong number of arguments"); }
+             let v = match args.into_iter().next().unwrap() {
+                 Arg::Question => panic!("Error, MatrixSlice cannot accept question mark arguments"),
+                 Arg::Val(v) => v,
+             };
+             let result = v.matrix_slice(slice1, slice2)?;
+             match next {
+                 Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                 None => Ok(result),
+             }
+         }
          else { Err(EvalError::TypeMismatch) }
      }
 
@@ -126,23 +150,106 @@
           } else { Err(EvalError::TypeMismatch) }
      }
 
-     // function composition. "self" should be a Closure or Macro
+     // function composition. "self" should be a callable value,
+     // i.e. a Closure, Macro, or ListSlice
      pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {
-         if let Closure{env, name, params, app, expr, next} = self {
-             let newnext = match next {
-                 Some(next) => next.fun_comp(other)?,
-                 None => other,
-             };
-             Ok(Closure{env, name, params, app, expr, next: Some(Box::new(newnext))})
-         } else if let Macro(name, next) = self {
-             let newnext = match next {
-                 Some(next) => next.fun_comp(other)?,
-                 None => other,
-             };
-             Ok(Macro(name, Some(Box::new(newnext))))
-         } else {
-             other.fun_app(vec![Arg::Val(Box::new(self))])
+         match self {
+             Closure { env, name, params, app, expr, next } => {
+                 let newnext = match next {
+                     Some(next) => next.fun_comp(other)?,
+                     None => other,
+                 };
+                 Ok(Closure{env, name, params, app, expr, next: Some(Box::new(newnext))})
+             }
+             Macro(name, next) => {
+                 let newnext = match next {
+                     Some(next) => next.fun_comp(other)?,
+                     None => other,
+                 };
+                 Ok(Macro(name, Some(Box::new(newnext))))
+             }
+             ListSlice(slice, next) => {
+                 let newnext = match next {
+                     Some(next) => next.fun_comp(other)?,
+                     None => other,
+                 };
+                 Ok(ListSlice(slice, Some(Box::new(newnext))))
+             }
+             MatrixSlice(slice1, slice2, next) => {
+                 let newnext = match next {
+                     Some(next) => next.fun_comp(other)?,
+                     None => other,
+                 };
+                 Ok(MatrixSlice(slice1, slice2, Some(Box::new(newnext))))
+             }
+             _ => other.fun_app(vec![Arg::Val(Box::new(self))])
          }
+     }
+
+     // Slicing can be applied to lists, strings, or callable values. Slicing
+     // matrices is handled differently
+     pub fn list_slice(self, slice: Slice<i32, Option<i32>>) -> EvalResult<SciVal> {
+        match self {
+             List(mut v) => {
+                 match slice.resolve_negative_indices(v.len())? {
+                     Slice::Single(i) => Ok(v.remove(i)),
+                     Slice::Range(i, j) => {
+                         v.truncate(j);
+                         Ok(List(v.split_off(i)))
+                     }
+                 }
+             }
+             Str(mut s) => {
+                 match slice.resolve_negative_indices(s.len())? {
+                     Slice::Single(i) => Ok(Str(s.chars().nth(i as usize).unwrap().to_string())),
+                     Slice::Range(i, j) => {
+                         s.truncate(j);
+                         Ok(Str(s.split_off(i)))
+                     }
+                 }
+             }
+             Closure { env, name, params, app, expr, next } => {
+                 Closure { env, name, params, app, expr, next }.fun_comp(ListSlice(slice, None))
+             }
+             Macro(name, next) => {
+                 Macro(name, next).fun_comp(ListSlice(slice, None))
+             }
+             ListSlice(firstslice, next) => {
+                 ListSlice(firstslice, next).fun_comp(ListSlice(slice, None))
+             }
+             MatrixSlice(slice1, slice2, next) => {
+                 MatrixSlice(slice1, slice2, next).fun_comp(ListSlice(slice, None))
+             }
+             _ => Err(EvalError::TypeMismatch)
+         }
+     }
+
+     // Matrix slicing can be applied to matrices or callable objects
+     pub fn matrix_slice(self, slice1: Slice<i32, Option<i32>>, slice2: Slice<i32, Option<i32>>) -> EvalResult<SciVal> {
+         match self {
+             Matrix(r, c, v) => {
+                 let slice1 = slice1.resolve_negative_indices(r)?;
+                 let slice2 = slice2.resolve_negative_indices(c)?;
+                 if let (Slice::Single(i), Slice::Single(j)) = (&slice1, &slice2) {
+                     return Ok(Number(v[(*i)*r + (*j)]));
+                 }
+                 let (r, c, v) = matrix::matrix_slice(r, c, &v, slice1, slice2);
+                 Ok(Matrix(r, c, v))
+             }
+             Closure { env, name, params, app, expr, next } => {
+                 Closure { env, name, params, app, expr, next }.fun_comp(MatrixSlice(slice1, slice2, None))
+             }
+             Macro(name, next) => {
+                 Macro(name, next).fun_comp(MatrixSlice(slice1, slice2, None))
+             }
+             ListSlice(firstslice, next) => {
+                 ListSlice(firstslice, next).fun_comp(MatrixSlice(slice1, slice2, None))
+             }
+             MatrixSlice(firstslice1, firstslice2, next) => {
+                 MatrixSlice(firstslice1, firstslice2, next).fun_comp(MatrixSlice(slice1, slice2, None))
+             }
+              _ => Err(EvalError::TypeMismatch)
+          }
      }
 
      pub fn inv(self) -> EvalResult<SciVal> {

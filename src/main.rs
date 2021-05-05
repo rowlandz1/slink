@@ -19,12 +19,23 @@ use pest::iterators::Pair;
 use pest::Parser;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use std::env;
+use std::fs;
+use std::io::Read;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 pub struct SciLangParser;
 
 fn main() {
+
+    // command line arguments
+    let command_line_args: Vec<String> = env::args().collect();
+    if command_line_args.len() == 2 {
+        interpret_file(&command_line_args[1]);
+        return;
+    }
+
     let mut environ = exec::Environ::new();
 
     // Setup rustyline
@@ -63,4 +74,23 @@ fn main() {
         }
     }
     //rl.save_history("history.txt").unwrap();
+}
+
+fn interpret_file(srcfile: &str) {
+    let mut environ = exec::Environ::new();
+    let mut srcfile = fs::File::open(srcfile)
+        .expect("Cannot open requested file");
+    let mut contents = String::new();
+    srcfile.read_to_string(&mut contents).unwrap();
+    let mut prog = SciLangParser::parse(Rule::prog, &mut contents)
+        .expect("unsuccessful parse");
+
+    let mut inner_rules = prog.next().unwrap().into_inner();
+    loop {
+        if let Some(stmt) = inner_rules.next() {
+            let ast = parser::get_ast_stmt(stmt);
+            //println!("DEBUG: AST: {:?}", ast);
+            environ.execute(ast);
+        } else { break; }
+    }
 }

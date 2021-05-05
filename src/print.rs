@@ -47,6 +47,12 @@ impl ToString for SciVal {
             SciVal::Macro(name, _) => {
                 format!("<macro: {}>", name)
             }
+            SciVal::ListSlice(_, _) => {
+                format!("<slice>")
+            }
+            SciVal::MatrixSlice(_, _, _) => {
+                format!("<matrix slice>")
+            }
         }
     }
 }

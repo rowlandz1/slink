@@ -64,6 +64,8 @@ pub enum SciVal {
         next: Option<Box<SciVal>>,              // if Some(v), then this closure is the first in a composition
     },
     Macro(String, Option<Box<SciVal>>),         // name, next
+    ListSlice(Slice<i32, Option<i32>>, Option<Box<SciVal>>),
+    MatrixSlice(Slice<i32, Option<i32>>, Slice<i32, Option<i32>>, Option<Box<SciVal>>),
 }
 
 pub enum Arg {
@@ -71,8 +73,8 @@ pub enum Arg {
     Val(Box<SciVal>),
 }
 
-#[derive(Debug)]
- pub enum Slice {
-     Single(usize),
-     Range(usize, usize),
+#[derive(Debug, Clone)]
+ pub enum Slice<F, S> {
+     Single(F),
+     Range(F, S),
  }

@@ -61,14 +61,14 @@ pub fn matrix_inv(d: usize, v: &mut Vec<number::Number>) -> EvalResult<Vec<numbe
 }
 
 // slices the matrix. Always returns a matrix even if it contains only one element
-pub fn matrix_slice(_r: usize, c: usize, v: &[number::Number], rslice: Slice, cslice: Slice) -> (usize, usize, Vec<number::Number>) {
+pub fn matrix_slice(_r: usize, c: usize, v: &[number::Number], rslice: Slice<usize, usize>, cslice: Slice<usize, usize>) -> (usize, usize, Vec<number::Number>) {
     let (rlow, rhigh) = match rslice {
         Slice::Single(i) => (i, i+1),
-        Slice::Range(i, j) => (i, j),
+        Slice::Range(i, j) => (i, j)
     };
     let (clow, chigh) = match cslice {
         Slice::Single(i) => (i, i+1),
-        Slice::Range(i, j) => (i, j)
+        Slice::Range(i, j) => (i, j),
     };
     let v: &[number::Number] = &v[rlow*c..rhigh*c];
     let mut ret: Vec<number::Number> = Vec::new();

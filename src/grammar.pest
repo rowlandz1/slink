@@ -20,9 +20,11 @@ UNOP6     = @{ "-" }
 BINOP7    = @{ "." }
 QUEST     = @{ "?" }
 
+prog = { stmt* }
+
 stmt = {
-    SOI ~ stmt_assign
-  | SOI ~ expr ~ ";"
+    WHITESPACE* ~ stmt_assign
+  | WHITESPACE* ~ expr ~ ";"
 }
 
 stmt_assign = { ID ~ "=" ~ expr ~ ";" }

@@ -5,9 +5,12 @@
 
 use std::collections::HashMap;
 use crate::ast::*;
+use crate::callable::Callable;
 use SciVal::*;
+use Callable::*;
 use crate::internals;
-use crate::number;
+use crate::number::Number;
+use Number::*;
 use crate::error::*;
 
 #[derive(Debug)]
@@ -34,9 +37,9 @@ impl Environ {
         match stmt {
             AstStmt::Assign(v, e) => {
                 match self.evaluate(*e) {
-                    Ok(Closure{env, params, app, expr, next, ..}) => {
+                    Ok(VCallable(Closure{env, params, app, expr, next, ..})) => {
                         let name = Some(v.clone());
-                        self.var_store.insert(v, Closure{env, name, params, app, expr, next});
+                        self.var_store.insert(v, VCallable(Closure{env, name, params, app, expr, next}));
                     }
                     Ok(evaled) => { self.var_store.insert(v, evaled); }
                     Err(e) => eprintln!("{}", e.to_string()),
@@ -87,9 +90,9 @@ impl Environ {
                 self.evaluate(*e)?.matrix_slice(rslice, cslice)
             }
             AstExpr::Matrix(r, c, v) => {
-                let mut vret: Vec<number::Number> = vec![];
+                let mut vret: Vec<Number> = vec![];
                 for subexpr in v {
-                    if let Number(n) = self.evaluate(subexpr)? {
+                    if let VNumber(n) = self.evaluate(subexpr)? {
                         vret.push(n);
                     } else { return Err(EvalError::TypeMismatch); }
                 }
@@ -107,14 +110,14 @@ impl Environ {
             }
             AstExpr::Str(s) => Ok(Str(s)),
             AstExpr::Lambda(params, inner_expr) => {
-                Ok(Closure{
+                Ok(VCallable(Closure{
                     env: self.to_owned().var_store,
                     name: None,
                     params,
                     app: HashMap::new(),
                     expr: Ok(inner_expr),
                     next: None
-                })
+                }))
             }
             AstExpr::Let(bindings, inner_expr) => {
                 for (v, e) in bindings {
@@ -143,11 +146,11 @@ impl Environ {
                 f.fun_kw_app(args_evaled)
             }
             AstExpr::Bool(b) => Ok(Bool(b)),
-            AstExpr::Int(n) => Ok(Number(number::Number::Int(n))),
-            AstExpr::Num(n) => Ok(Number(number::Number::Float(n))),
-            AstExpr::IntImag(n) => Ok(Number(number::Number::IntCmplx(0, n))),
-            AstExpr::FloatImag(n) => Ok(Number(number::Number::FloatCmplx(0f64, n))),
-            AstExpr::Macro(name) => Ok(Macro(name, None)),
+            AstExpr::Int(n) => Ok(VNumber(Int(n))),
+            AstExpr::Num(n) => Ok(VNumber(Float(n))),
+            AstExpr::IntImag(n) => Ok(VNumber(IntCmplx(0, n))),
+            AstExpr::FloatImag(n) => Ok(VNumber(FloatCmplx(0f64, n))),
+            AstExpr::Macro(name) => Ok(VCallable(Macro(name, None))),
             AstExpr::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())
@@ -162,24 +165,24 @@ impl Environ {
     fn evaluate_slice(&mut self, slice: AstSlice) -> EvalResult<Slice<i32, Option<i32>>> {
         match slice {
             AstSlice::Single(i) => {
-                let i = if let Number(number::Number::Int(i)) = self.evaluate(*i)? { i }
+                let i = if let VNumber(Int(i)) = self.evaluate(*i)? { i }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Single(i))
             }
             AstSlice::Range(Some(i), Some(j)) => {
-                let i = if let Number(number::Number::Int(i)) = self.evaluate(*i)? { i }
+                let i = if let VNumber(Int(i)) = self.evaluate(*i)? { i }
                         else { return Err(EvalError::TypeMismatch); };
-                let j = if let Number(number::Number::Int(j)) = self.evaluate(*j)? { j }
+                let j = if let VNumber(Int(j)) = self.evaluate(*j)? { j }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Range(i, Some(j)))
             }
             AstSlice::Range(None, Some(j)) => {
-                let j = if let Number(number::Number::Int(j)) = self.evaluate(*j)? { j }
+                let j = if let VNumber(Int(j)) = self.evaluate(*j)? { j }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Range(0, Some(j)))
             }
             AstSlice::Range(Some(i), None) => {
-                let i = if let Number(number::Number::Int(i)) = self.evaluate(*i)? { i }
+                let i = if let VNumber(Int(i)) = self.evaluate(*i)? { i }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Range(i, None))
             }

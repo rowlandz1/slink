@@ -9,6 +9,7 @@ mod number;
 mod matrix;
 mod value;
 mod macros;
+mod callable;
 
 extern crate pest;
 #[macro_use]

@@ -9,14 +9,17 @@ use crate::ast::SciVal;
 use crate::ast::Arg;
 use crate::error::EvalError;
 use crate::error::EvalResult;
-use crate::number;
+use crate::number::Number;
+use Number::*;
 use crate::matrix::*;
+use crate::callable::Callable;
 use SciVal::*;
+use Callable::*;
 
 pub fn get_internal(name: String) -> EvalResult<SciVal> {
     match name.as_str() {
-        "pi" => { return Ok(Number(number::Number::Float(std::f64::consts::PI))); }
-        "e" => { return Ok(Number(number::Number::Float(std::f64::consts::E))); }
+        "pi" => { return Ok(VNumber(Float(std::f64::consts::PI))); }
+        "e" => { return Ok(VNumber(Float(std::f64::consts::E))); }
         _ => {}
     }
 
@@ -58,14 +61,14 @@ pub fn get_internal(name: String) -> EvalResult<SciVal> {
     };
     let params: Vec<String> = params.into_iter().map(|x| x.to_string()).collect();
 
-    Ok(Closure{
+    Ok(VCallable(Closure{
         env,
         name: None,
         params,
         app: HashMap::new(),
         expr: Err(name),
         next: None
-    })
+    }))
 }
 
 // Applies the arguments to the internal function.
@@ -85,13 +88,13 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("det") {
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
             if r != c { return Err(EvalError::InvalidMatrixShape); }
-            Ok(Number(matrix_det(r, &v)))
+            Ok(VNumber(matrix_det(r, &v)))
         } else { return Err(EvalError::TypeMismatch) }
     } else if intfun.eq("inv") {
         args.remove("0").unwrap().inv()
     } else if intfun.eq("transpose") {
         if let Matrix(r, c, v) = args.remove("0").unwrap() {
-            let mut newv: Vec<number::Number> = vec![];
+            let mut newv: Vec<Number> = vec![];
             for j in 0..c {
                 for i in 0..r {
                     newv.push(v[i*c + j]);
@@ -100,13 +103,13 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             Ok(Matrix(c, r, newv))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("eye") {
-        if let Number(number::Number::Int(n)) = args.remove("0").unwrap() {
+        if let VNumber(Int(n)) = args.remove("0").unwrap() {
             if n < 1 { return Err(EvalError::OutOfRange); }
             let n = n as usize;
-            let mut v = vec![number::Number::Int(0); n*n];
+            let mut v = vec![Int(0); n*n];
             let mut i = 0;
             while i < v.len() {
-                v[i] = number::Number::Int(1);
+                v[i] = Int(1);
                 i += n + 1;
             }
             Ok(Matrix(n, n, v))
@@ -114,8 +117,8 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("abs") {
         args.remove("0").unwrap().abs()
     } else if intfun.eq("sqrt") {
-        if let Number(n) = args.remove("0").unwrap() {
-            Ok(Number(n.sqrt()?))
+        if let VNumber(n) = args.remove("0").unwrap() {
+            Ok(VNumber(n.sqrt()?))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("conj") {
         args.remove("0").unwrap().conjugate()
@@ -128,11 +131,11 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
             }
             Ok(m)
         } else if let Matrix(_, _, v) = arg {
-            let mut m: number::Number = v[0];
+            let mut m = v[0];
             for elem in v {
                 if let cmp::Ordering::Greater = elem.compare(&m)? { m = elem; }
             }
-            Ok(Number(m))
+            Ok(VNumber(m))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("argmax") {
         let arg = args.remove("0").unwrap();
@@ -144,7 +147,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
                 if let Bool(true) = elem.gt(&m)? { m = elem; i = j; }
                 j += 1;
             }
-            Ok(Number(number::Number::Int(i as i32)))
+            Ok(VNumber(Int(i as i32)))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("argmin") {
         let arg = args.remove("0").unwrap();
@@ -156,12 +159,12 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
                 if let Bool(true) = elem.lt(&m)? { m = elem; i = j; }
                 j += 1;
             }
-            Ok(Number(number::Number::Int(i as i32)))
+            Ok(VNumber(Int(i as i32)))
         } else { return Err(EvalError::TypeMismatch); }
     } else if intfun.eq("len") {
         match args.remove("0").unwrap() {
-            List(v) => Ok(Number(number::Number::Int(v.len() as i32))),
-            Str(s) => Ok(Number(number::Number::Int(s.len() as i32))),
+            List(v) => Ok(VNumber(Int(v.len() as i32))),
+            Str(s) => Ok(VNumber(Int(s.len() as i32))),
             _ => Err(EvalError::TypeMismatch)
         }
     } else if intfun.eq("reverse") {
@@ -174,9 +177,9 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
         match args.remove("0").unwrap() {
             Str(s) => {
                 if let Ok(n) = s.parse::<i32>() {
-                    Ok(Number(number::Number::Int(n)))
+                    Ok(VNumber(Int(n)))
                 } else if let Ok(n) = s.parse::<f64>() {
-                    Ok(Number(number::Number::Float(n)))
+                    Ok(VNumber(Float(n)))
                 } else { Err(EvalError::TypeConversionError) }
             }
             _ => Err(EvalError::TypeMismatch)
@@ -208,13 +211,13 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("range") {
         let arg1 = args.remove("1").unwrap();
         let arg0 = args.remove("0").unwrap();
-        if let (Number(number::Number::Int(arg0)), Number(number::Number::Int(arg1))) = (arg0, arg1) {
+        if let (VNumber(Int(arg0)), VNumber(Int(arg1))) = (arg0, arg1) {
             let arg0 = arg0 as usize;
             let arg1 = arg1 as usize;
             if arg0 >= arg1 { return Ok(List(vec![])); }
             let mut retv: Vec<SciVal> = Vec::new();
             for n in arg0..arg1 {
-                retv.push(Number(number::Number::Int(n as i32)));
+                retv.push(VNumber(Int(n as i32)));
             }
             return Ok(List(retv));
         } else { return Err(EvalError::TypeMismatch); }
@@ -269,7 +272,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, SciVal>) -> E
     } else if intfun.eq("op-") {
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();
-        lhs + (Number(number::Number::Int(-1)) * rhs)?
+        lhs + (VNumber(Int(-1)) * rhs)?
     } else if intfun.eq("op*") {
         let rhs = args.remove("1").unwrap();
         let lhs = args.remove("0").unwrap();

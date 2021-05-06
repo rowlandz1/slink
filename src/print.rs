@@ -4,11 +4,12 @@
  */
 
 use crate::ast::*;
+use crate::callable::Callable;
 
 impl ToString for SciVal {
     fn to_string(&self) -> String {
         match self {
-            SciVal::Number(n) => n.to_string(),
+            SciVal::VNumber(n) => n.to_string(),
             SciVal::Bool(b) => b.to_string(),
             SciVal::Matrix(_, c, v) => {
                 let mut vs: Vec<String> = vec![];
@@ -34,23 +35,31 @@ impl ToString for SciVal {
                 let vstrings: Vec<String> = v.iter().map(|x| x.to_string()).collect();
                 format!("({})", vstrings.join(", "))
             }
-            SciVal::Closure{params, app, ..} => {
+            SciVal::Str(s) => {
+                format!("'{}'", s.clone())
+            }
+            SciVal::VCallable(f) => f.to_string(),
+        }
+    }
+}
+
+impl ToString for Callable {
+    fn to_string(&self) -> String {
+        match self {
+            Callable::Closure{params, app, ..} => {
                 let mut appstring = String::new();
                 for (key, val) in app {
                     appstring = format!("{} {}={}", appstring, key, val.to_string());
                 }
                 format!("lam {}{} -> *", params.join(" "), appstring)
             }
-            SciVal::Str(s) => {
-                format!("'{}'", s.clone())
-            }
-            SciVal::Macro(name, _) => {
+            Callable::Macro(name, _) => {
                 format!("<macro: {}>", name)
             }
-            SciVal::ListSlice(_, _) => {
+            Callable::ListSlice(_, _) => {
                 format!("<slice>")
             }
-            SciVal::MatrixSlice(_, _, _) => {
+            Callable::MatrixSlice(_, _, _) => {
                 format!("<matrix slice>")
             }
         }

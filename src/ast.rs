@@ -4,7 +4,8 @@
  */
 
 use std::collections::HashMap;
-use crate::number;
+use crate::number::Number;
+use crate::callable::Callable;
 
 #[derive(Debug, Clone)]
 pub enum AstStmt {
@@ -49,23 +50,13 @@ pub enum AstSlice {
 
 #[derive(Debug, Clone)]
 pub enum SciVal {
-    Number(number::Number),
+    VNumber(Number),
     Bool(bool),
-    Matrix(usize, usize, Vec<number::Number>),  // numrows, numcols, index = row*numcols + col
+    Matrix(usize, usize, Vec<Number>),  // numrows, numcols, index = row*numcols + col
     List(Vec<SciVal>),
     Tuple(Vec<SciVal>),
     Str(String),
-    Closure {
-        env: HashMap<String, SciVal>,           // environment in which closure was defined
-        name: Option<String>,                   // closure name (for error tracing and recursion)
-        params: Vec<String>,                    // unapplied parameter list
-        app: HashMap<String, SciVal>,           // applied parameters
-        expr: Result<Box<AstExpr>, String>,     // inner expression (or string for internal functions)
-        next: Option<Box<SciVal>>,              // if Some(v), then this closure is the first in a composition
-    },
-    Macro(String, Option<Box<SciVal>>),         // name, next
-    ListSlice(Slice<i32, Option<i32>>, Option<Box<SciVal>>),
-    MatrixSlice(Slice<i32, Option<i32>>, Slice<i32, Option<i32>>, Option<Box<SciVal>>),
+    VCallable(Callable)
 }
 
 pub enum Arg {

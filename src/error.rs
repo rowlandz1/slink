@@ -67,3 +67,15 @@ impl ToString for EvalError {
         }
     }
 }
+
+pub enum TypeError {
+    TypeMismatch,
+}
+
+pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
+
+impl ToString for TypeError {
+    fn to_string(&self) -> String {
+        String::from("Type Error")
+    }
+}

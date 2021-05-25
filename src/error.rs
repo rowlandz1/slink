@@ -3,6 +3,8 @@
  * Defines evaluation errors and error messages.
  */
 
+use crate::types::Type;
+
 #[derive(Debug)]
 pub enum EvalError {
     InvalidMatrixShape,
@@ -69,13 +71,25 @@ impl ToString for EvalError {
 }
 
 pub enum TypeError {
-    TypeMismatch,
+    UnknownIdentifier(String),
+    UnificationFailed(Type, Type),
+    Other,
 }
 
 pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
 
 impl ToString for TypeError {
     fn to_string(&self) -> String {
-        String::from("Type Error")
+        match self {
+            TypeError::UnknownIdentifier(id) => {
+                format!("TypeError: unknown identifier '{}'", id)
+            }
+            TypeError::UnificationFailed(t1, t2) => {
+                format!("TypeError: cannot unify types {} and {}", t1.to_string(), t2.to_string())
+            }
+            TypeError::Other => {
+                format!("TypeError: some other error happened")
+            }
+        }
     }
 }

@@ -51,10 +51,10 @@ impl Callable {
                 return Err(EvalError::ArityMismatch);
             }
             let appliedparams = params.split_off(params.len() - args.len());
-            for (param, arg) in appliedparams.iter().zip(args) {
+            for (param, arg) in appliedparams.into_iter().zip(args) {
                 match arg {
-                    Arg::Question => { params.push(param.clone()); }
-                    Arg::Val(arg) => { app.insert(param.clone(), *arg.clone()); }
+                    Arg::Question => params.push(param),
+                    Arg::Val(arg) => { app.insert(param, *arg); }
                 }
             }
             if params.len() == 0 {

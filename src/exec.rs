@@ -12,7 +12,7 @@ use crate::internals;
 use crate::number::Number;
 use Number::*;
 use crate::error::*;
-use crate::types;
+use crate::types::TAssums;
 
 #[derive(Debug)]
 pub struct Environ {
@@ -48,8 +48,8 @@ impl Environ {
                 }
             }
             AstStmt::Display(mut e) => {
-                let typ = match e.type_check() {
-                    Ok(_) => e.typ.clone(),
+                let typ = match e.type_check(&mut TAssums::new()) {
+                    Ok(typ) => typ,
                     Err(err) => {
                         eprintln!("{}", err.to_string());
                         return;

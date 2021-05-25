@@ -48,13 +48,14 @@ impl Environ {
                 }
             }
             AstStmt::Display(mut e) => {
-                let typ = match e.type_check(&mut TAssums::new()) {
+                let mut typ = match e.type_check(&mut TAssums::new()) {
                     Ok(typ) => typ,
                     Err(err) => {
                         eprintln!("{}", err.to_string());
                         return;
                     }
                 };
+                typ.normalize_type_var_names();
                 match self.evaluate(*e) {
                     Ok(evaled) => println!("{} :: {}", evaled.to_string(), typ.to_string()),
                     Err(err) => eprintln!("{}", err.to_string())

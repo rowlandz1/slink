@@ -73,7 +73,7 @@ impl ToString for EvalError {
 pub enum TypeError {
     UnknownIdentifier(String),
     UnificationFailed(Type, Type),
-    Other,
+    ArgumentListTooLong,
 }
 
 pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
@@ -87,8 +87,8 @@ impl ToString for TypeError {
             TypeError::UnificationFailed(t1, t2) => {
                 format!("TypeError: cannot unify types {} and {}", t1.to_string(), t2.to_string())
             }
-            TypeError::Other => {
-                format!("TypeError: some other error happened")
+            TypeError::ArgumentListTooLong => {
+                format!("TypeError: argument list is too long")
             }
         }
     }

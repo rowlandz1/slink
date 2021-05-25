@@ -1,6 +1,6 @@
 /* types.rs
  *
- * Type definitions and type-checking algorithm
+ * Type definitions and type-checking algorithm.
  */
 
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ pub enum Type {
     Tuple,
     TVar(String),
     Func(Vec<Type>, Box<Type>),
-    Any,
+    Any,    // used for ?-argument syntax
     Unknown,
 }
 
@@ -43,7 +43,7 @@ impl TAssums {
     pub fn push_new_frame(&mut self, ids: &[String]) {
         let mut hm: HashMap<String, (usize, Type)> = HashMap::new();
         for i in 0..ids.len() {
-            let new_assumption = Type::TVar(TAssums::str_repr(self.i));
+            let new_assumption = Type::TVar(int2typevar(self.i));
             self.i += 1;
             hm.insert(ids[i].clone(), (i, new_assumption));
         }
@@ -81,7 +81,6 @@ impl TAssums {
     /// A UnificationFailed error is returned if the intersection
     /// is empty.
     pub fn unify(&mut self, t1: Type, t2: Type) -> TypeCheckResult<Type> {
-        println!("Unifying {} and {}", t1.to_string(), t2.to_string());
         match (t1, t2) {
             (Type::Any, t2) |
             (t2, Type::Any) => Ok(t2),
@@ -95,31 +94,16 @@ impl TAssums {
                     return Err(TypeError::UnificationFailed(Type::TVar(v), t2));
                 }
                 self.replace_type_var(v, t2.clone());
-                println!("---Result: {}", t2.to_string());
                 Ok(t2)
             }
             (Type::Unknown, _) | (_, Type::Unknown)=> Ok(Type::Unknown),
             (Type::Func(mut args1, ret1), Type::Func(mut args2, ret2)) => {
-                if args1.len() == args2.len() {
-                    args1.push(*ret1);
-                    args2.push(*ret2);
-                    let mut args3 = self.unify_pairs(args1, args2)?;
-                    let ret3 = Box::new(args3.pop().unwrap());
-                    Ok(Type::Func(args3, ret3))
-                } else if args1.len() > args2.len() {
-                    let args1_mod = args1.split_off(args1.len() - args2.len());
-                    let ret1_mod = Box::new(Type::Func(args1, ret1));
-                    self.unify(Type::Func(args1_mod, ret1_mod), Type::Func(args2, ret2))
-                    // let mut args3: Vec<Type> = Vec::new();
-                    // for (arg1, arg2) in args1_mod.into_iter().zip(args2) {
-                    //     args3.push(self.unify(arg1, arg2)?);
-                    // }
-                    // let ret3 = self.unify(ret1_mod, *ret2)?;
-                    // Ok(Type::Func(args3, Box::new(ret3)))
-                } else {
-                    // IMPORTANT: the argument list should not always just be switched around!
-                    self.unify(Type::Func(args2, ret2), Type::Func(args1, ret1))
-                }
+                if args1.len() != args2.len() { return Err(TypeError::ArgumentListTooLong); }
+                args1.push(*ret1);
+                args2.push(*ret2);
+                let mut args3 = self.unify_pairs(args1, args2)?;
+                let ret3 = Box::new(args3.pop().unwrap());
+                Ok(Type::Func(args3, ret3))
             }
             (t1, t2) => if t1 == t2 { Ok(t1) }
                                else { Err(TypeError::UnificationFailed(t1, t2)) }
@@ -147,7 +131,7 @@ impl TAssums {
 
     /// Returns a fresh type variable.
     pub fn fresh_type_var(&mut self) -> String {
-        let ret = TAssums::str_repr(self.i);
+        let ret = int2typevar(self.i);
         self.i += 1;
         ret
     }
@@ -161,13 +145,6 @@ impl TAssums {
         for typ in self.type_stack.iter_mut() {
             typ.replace_type_var(&tvar, &with);
         }
-    }
-
-    /// Converts a type variable (numeric representation) into its string representation
-    fn str_repr(i: u32) -> String {
-        let num_primes = (i / 26) as usize;
-        let letter = char::from_u32((i % 26) + 0x41).unwrap();
-        format!("{}{}", letter, "'".repeat(num_primes))
     }
 }
 
@@ -189,44 +166,56 @@ impl E {
                 Type::Func(ta.pop_frame(), Box::new(bodytype))
             }
             E::FunApp(f, args) => {
-                let mut is_question_mark: Vec<bool> = Vec::new();
+                // type check each of the argument expressions
                 for arg in args.iter_mut().rev() {
                     match arg {
-                        AstArg::Question => {
-                            let fv = ta.fresh_type_var();
-                            ta.push_type(Type::Any);
-                            is_question_mark.push(true);
-                        }
+                        AstArg::Question => ta.push_type(Type::Any),
                         AstArg::Expr(e) => {
                             let typ = e.type_check(ta)?;
                             ta.push_type(typ);
-                            is_question_mark.push(false);
                         }
                     }
                 }
+
+                // type check the function expression
                 let ftype = f.type_check(ta)?;
 
+                // retrieve (possibly) modified argument types
                 let mut argtypes: Vec<Type> = Vec::new();
                 for _ in 0..args.len() {
                     argtypes.push(ta.pop_type());
                 }
 
-                let type2 = Type::Func(argtypes, Box::new(Type::TVar(ta.fresh_type_var())));
-                let unified = ta.unify(ftype, type2)?;
-                if let Type::Func(argtypes, rettype) = unified {
-                    if argtypes.len() != is_question_mark.len() {
-                        panic!("{} vs. {}", argtypes.len(), is_question_mark.len());
+                // If partial application is happening (including ?-syntax), partially-curry
+                // the function type (e.g. (A,B,C) -> D becomes (B,C) -> (A) -> D).
+                // Also, remove the "Any" types from the arg list.
+                let type1 = if let Type::Func(mut paramtypes, rettype) = ftype {
+                    if paramtypes.len() < argtypes.len() { return Err(TypeError::ArgumentListTooLong); }
+                    let mut appliedparams = paramtypes.split_off(paramtypes.len() - argtypes.len());
+
+                    let mut i = 0;
+                    while i < appliedparams.len() {
+                        if let Type::Any = argtypes[i] {
+                            argtypes.remove(i);
+                            paramtypes.push(appliedparams.remove(i));
+                        } else {
+                            i += 1;
+                        }
                     }
-                    let mut newargtypes: Vec<Type> = Vec::new();
-                    for (argtype, q) in argtypes.into_iter().zip(is_question_mark) {
-                        if q { newargtypes.push(argtype); }
-                    }
-                    if newargtypes.len() > 0 {
-                        Type::Func(newargtypes, rettype)
+
+                    if paramtypes.len() > 0 {
+                        Type::Func(appliedparams, Box::new(Type::Func(paramtypes, rettype)))
                     } else {
-                        *rettype
+                        Type::Func(appliedparams, rettype)
                     }
-                } else { panic!("Error, unified type wasn't a function"); }
+                } else { ftype };
+
+                // Unify the function type and "(argtypes) -> newtypevar"
+                // and return the return type.
+                let type2 = Type::Func(argtypes, Box::new(Type::TVar(ta.fresh_type_var())));
+                if let Type::Func(_, rettype) = ta.unify(type1, type2)? {
+                    *rettype
+                } else { unreachable!() }
             }
             E::Matrix(_, _, _) => Type::Matrix,
             E::List(_) => Type::List,
@@ -293,4 +282,38 @@ impl Type {
             _ => false
         }
     }
+
+    /// Renames type variables to be more visually appealing.
+    pub fn normalize_type_var_names(&mut self) {
+        self.normalize_helper(&mut 0, &mut HashMap::new());
+    }
+
+    fn normalize_helper(&mut self, i: &mut u32, h: &mut HashMap<String, String>) {
+        match self {
+            Type::TVar(v) => {
+                if let Some(r) = h.get(v) {
+                    *v = r.clone();
+                } else {
+                    let newv = int2typevar(i.clone());
+                    h.insert((*v).clone(), newv.clone());
+                    *v = newv;
+                    *i += 1;
+                }
+            }
+            Type::Func(argtypes, rettype) => {
+                for arg in argtypes {
+                    arg.normalize_helper(i, h);
+                }
+                rettype.normalize_helper(i, h);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Converts a type variable (numeric representation) into its string representation
+fn int2typevar(i: u32) -> String {
+    let num_primes = (i / 26) as usize;
+    let letter = char::from_u32((i % 26) + 0x41).unwrap();
+    format!("{}{}", letter, "'".repeat(num_primes))
 }

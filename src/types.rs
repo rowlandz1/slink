@@ -4,8 +4,7 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::{AstExpr, AstExprTree as E};
-use crate::ast::AstArg;
+use crate::ast::{AstArg, AstExpr as E};
 use crate::error::{TypeError, TypeCheckResult};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -148,16 +147,10 @@ impl TAssums {
     }
 }
 
-impl AstExpr {
-    /// Performs type checking and type annotation for expressions.
-    /// `ta`: a set of type assumptions for variables and will be modified as
-    /// type refinement happens
-    pub fn type_check(&mut self, ta: &mut TAssums) -> TypeCheckResult<Type> {
-        self.tree.type_check(ta)
-    }
-}
-
 impl E {
+    /// Performs type checking for expressions.
+    /// `ta`: a set of type assumptions for variables, modified as type
+    /// refinement happens
     pub fn type_check(&mut self, ta: &mut TAssums) -> TypeCheckResult<Type> {
         let typ = match self {
             E::Lambda(params, body) => {

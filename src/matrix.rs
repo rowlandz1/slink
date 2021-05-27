@@ -3,10 +3,10 @@
  * Definition of matrix operations
  */
 
+use crate::error::EvalResult;
 use crate::number::Number;
-use Number::*;
-use crate::error::*;
-use crate::ast::Slice;
+use crate::value::Slice;
+use Number::Int;
 
 pub fn matrix_det(d: usize, v: &Vec<Number>) -> Number {
     if d == 1 { return v[0]; }

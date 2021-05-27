@@ -6,9 +6,9 @@
  */
 
 use std::collections::HashMap;
-use crate::Rule;
 use pest::iterators::Pair;
-use crate::ast::{AstExpr as AST, AstStmt, AstArg, AstSlice};
+use crate::ast::{AstExpr as E, AstStmt, AstArg, AstSlice};
+use crate::Rule;
 
 pub fn get_ast_stmt(stmt: Pair<Rule>) -> AstStmt {
     match stmt.as_rule() {
@@ -29,7 +29,7 @@ pub fn get_ast_stmt(stmt: Pair<Rule>) -> AstStmt {
     }
 }
 
-pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
+pub fn get_ast_expr(expr: Pair<Rule>) -> E {
     match expr.as_rule() {
         Rule::expr |
         Rule::expr1 |
@@ -43,7 +43,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
                 if let Some(op) = inner_rules.next() {
                     let op = op.as_str().to_string();
                     let operand2 = get_ast_expr(inner_rules.next().unwrap());
-                    ret = AST::binop(op, ret, operand2);
+                    ret = E::binop(op, ret, operand2);
                 } else { break; }
             }
             ret
@@ -55,7 +55,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
                 if let Some(op) = inner_rules.next() {
                     let op = op.as_str().to_string();
                     let operand2 = get_ast_expr(inner_rules.next().unwrap());
-                    ret = AST::binop(op, operand2, ret);
+                    ret = E::binop(op, operand2, ret);
                 } else { break; }
             }
             ret
@@ -67,7 +67,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
             loop {
                 if let Some(op) = inner_rules.next() {
                     let op = op.as_str().to_string();
-                    ret = AST::unop(op, ret);
+                    ret = E::unop(op, ret);
                 } else { break; }
             }
             ret
@@ -82,18 +82,18 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
                     let inside = paren_inner_rules.next().unwrap();
                     match inside.as_rule() {
                         Rule::arg_list => {
-                            ret = AST::fun_app(ret, parse_arg_list(inside));
+                            ret = E::fun_app(ret, parse_arg_list(inside));
                         }
                         Rule::kwarg_list => {
-                            ret = AST::fun_kw_app(ret, parse_kwarg_list(inside));
+                            ret = E::fun_kw_app(ret, parse_kwarg_list(inside));
                         }
                         Rule::slice => {
                             let slice1 = parse_slice(inside);
                             if let Some(inside) = paren_inner_rules.next() {
                                 let slice2 = parse_slice(inside);
-                                ret = AST::matrix_index(ret, slice1, slice2)
+                                ret = E::matrix_idx(ret, slice1, slice2)
                             } else {
-                                ret = AST::list_index(ret, slice1);
+                                ret = E::list_idx(ret, slice1);
                             }
                         }
                         _ => unreachable!()
@@ -107,7 +107,7 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
             get_ast_expr(expr.into_inner().next().unwrap())
         }
         Rule::matrix => {
-            let mut firstrow: Vec<AST> = vec![];
+            let mut firstrow: Vec<E> = vec![];
             let mut inner_rules = expr.into_inner();
             for pair in inner_rules.next().unwrap().into_inner() {
                 firstrow.push(get_ast_expr(pair));
@@ -131,9 +131,9 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
                     None => break,
                 }
             }
-            AST::matrix(numrows, numcols, firstrow)
+            E::matrix(numrows, numcols, firstrow)
         }
-        Rule::list => AST::list(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
+        Rule::list => E::list(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
         Rule::lam_expr => {
             let mut param_vec: Vec<String> = vec![];
             let mut inner_rules = expr.into_inner();
@@ -145,11 +145,11 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
                 param_vec.push(pair.as_str().to_string());
             }
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
-            AST::lambda(param_vec, inner_expr)
+            E::lambda(param_vec, inner_expr)
         }
         Rule::let_expr => {
             let mut inner_rules = expr.into_inner();
-            let mut bindings: Vec<(String, AST)> = vec![];
+            let mut bindings: Vec<(String, E)> = vec![];
             let mut inner1 = inner_rules.next().unwrap().into_inner();
             loop {
                 if let Some(id) = inner1.next() {
@@ -159,41 +159,41 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> AST {
                 } else { break; }
             }
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
-            AST::let_expr(bindings, inner_expr)
+            E::let_expr(bindings, inner_expr)
         }
-        Rule::tuple => AST::tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
-        Rule::bool => AST::bool(expr.as_str().eq("true")),
+        Rule::tuple => E::tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
+        Rule::bool => E::bool(expr.as_str().eq("true")),
         Rule::string => {
             let s = expr.as_str();
             let s = handle_escape_sequences(&s[1..s.len()-1]);
-            AST::str(s)
+            E::str(s)
         }
         Rule::ID |
         Rule::OPID => {
-            AST::id(expr.as_str().to_string())
+            E::id(expr.as_str().to_string())
         }
         Rule::MACROID => {
-            AST::macro_expr(expr.as_str().to_string())
+            E::macro_expr(expr.as_str().to_string())
         }
         Rule::FLOATIMAG => {
             let value: f64 = expr.as_str().trim_end_matches("i").parse()
                 .expect("Cannot parse float imaginary");
-            AST::float_imag(value)
+            E::float_imag(value)
         }
         Rule::INTIMAG => {
             let value: i32 = expr.as_str().trim_end_matches("i").parse()
                 .expect("Cannot parse int imaginary");
-            AST::int_imag(value)
+            E::int_imag(value)
         }
         Rule::FLOAT => {
             let value: f64 = expr.as_str().parse()
                 .expect("Cannot parse number");
-            AST::num(value)
+            E::num(value)
         }
         Rule::INT => {
             let value: i32 = expr.as_str().parse()
                 .expect("Cannot parse number");
-            AST::int(value)
+            E::int(value)
         }
         _ => unreachable!()
     }
@@ -212,8 +212,8 @@ fn parse_arg_list(arg_list: Pair<Rule>) -> Vec<AstArg> {
     arg_vec
 }
 
-fn parse_kwarg_list(kwarg_list: Pair<Rule>) -> HashMap<String, AST> {
-    let mut kwarg_map: HashMap<String, AST> = HashMap::new();
+fn parse_kwarg_list(kwarg_list: Pair<Rule>) -> HashMap<String, E> {
+    let mut kwarg_map: HashMap<String, E> = HashMap::new();
     for arg in kwarg_list.into_inner() {
         let mut inner_rules = arg.into_inner();
         let id = inner_rules.next().unwrap().as_str().to_string();

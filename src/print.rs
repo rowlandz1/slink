@@ -1,15 +1,15 @@
 /* print.rs
  *
- * Includes functions for printing values to stdout
+ * Includes functions for printing values to stdout.
  */
 
-use crate::ast::*;
 use crate::callable::Callable;
+use crate::value::SciVal;
 
 impl ToString for SciVal {
     fn to_string(&self) -> String {
         match self {
-            SciVal::VNumber(n) => n.to_string(),
+            SciVal::Number(n) => n.to_string(),
             SciVal::Bool(b) => b.to_string(),
             SciVal::Matrix(_, c, v) => {
                 let mut vs: Vec<String> = vec![];
@@ -38,7 +38,7 @@ impl ToString for SciVal {
             SciVal::Str(s) => {
                 format!("'{}'", s.clone())
             }
-            SciVal::VCallable(f) => f.to_string(),
+            SciVal::Callable(f) => f.to_string(),
         }
     }
 }

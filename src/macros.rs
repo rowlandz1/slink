@@ -1,12 +1,17 @@
-use crate::error::*;
-use crate::ast::SciVal;
+/* macros.rs
+ *
+ * Defines evaluation of macros.
+ */
+
+use crate::error::{EvalError, EvalResult};
 use crate::number::Number::Int;
+use crate::value::SciVal;
 
 pub fn apply_to_macro(name: String, mut args: Vec<SciVal>) -> EvalResult<SciVal> {
     if name.eq("list!") {
         Ok(SciVal::List(args))
     } else if name.eq("sum!") {
-        let mut sum: SciVal = SciVal::VNumber(Int(0));
+        let mut sum: SciVal = SciVal::Number(Int(0));
         for arg in args {
             sum = (sum + arg)?;
         }

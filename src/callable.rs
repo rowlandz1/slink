@@ -4,12 +4,12 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::*;
-use crate::error::*;
+use crate::ast::AstExpr;
+use crate::error::{EvalError, EvalResult};
 use crate::exec::Environ;
-use crate::internals;
-use crate::macros;
-use SciVal::*;
+use crate::internals::apply_to_internal;
+use crate::macros::apply_to_macro;
+use crate::value::{Arg, Slice, SciVal};
 use Callable::*;
 
 #[derive(Debug, Clone)]
@@ -35,7 +35,7 @@ impl Callable {
         for arg in args {
             match arg {
                 Arg::Question => { newargs.push(Arg::Question); }
-                Arg::Val(v) => if let Tuple(v) = *v {
+                Arg::Val(v) => if let SciVal::Tuple(v) = *v {
                     for va in v { newargs.push(Arg::Val(Box::new(va))); }
                 } else { newargs.push(Arg::Val(v)); }
             }
@@ -61,7 +61,7 @@ impl Callable {
                 env.extend(app.into_iter());
                 let result = match expr {
                     Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                    Err(name) => internals::apply_to_internal(name, env),
+                    Err(name) => apply_to_internal(name, env),
                 };
                 let result = match result {
                     Ok(v) => v,
@@ -76,7 +76,7 @@ impl Callable {
                     None => Ok(result),
                 }
             } else {
-                Ok(VCallable(Closure{env, name, params, app, expr, next}))
+                Ok(SciVal::Callable(Closure{env, name, params, app, expr, next}))
             }
         }
         else if let Macro(name, next) = self {
@@ -87,7 +87,7 @@ impl Callable {
                     Arg::Val(v) => { newargs.push(*v); }
                 }
             }
-            let result = macros::apply_to_macro(name, newargs)?;
+            let result = apply_to_macro(name, newargs)?;
             match next {
                 Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
                 None => Ok(result),
@@ -138,7 +138,7 @@ impl Callable {
                  env.extend(app.into_iter());
                  let result = match expr {
                      Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                     Err(name) => internals::apply_to_internal(name, env),
+                     Err(name) => apply_to_internal(name, env),
                  };
                  let result = match result {
                      Ok(v) => v,
@@ -153,7 +153,7 @@ impl Callable {
                      None => Ok(result),
                  }
              } else {
-                 Ok(VCallable(Closure{env, name, params, app, expr, next}))
+                 Ok(SciVal::Callable(Closure{env, name, params, app, expr, next}))
              }
 
          } else { Err(EvalError::TypeMismatch) }

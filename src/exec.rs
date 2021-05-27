@@ -4,30 +4,30 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::{AstExpr, AstExprTree as E, AstStmt, AstArg, AstSlice};
-use crate::ast::{SciVal as V, Slice, Arg};
+use crate::ast::{AstExpr as E, AstStmt, AstArg, AstSlice};
 use crate::callable::Callable;
-use Callable::*;
-use crate::internals;
+use crate::error::{EvalError, EvalResult};
+use crate::internals::get_internal;
 use crate::number::Number;
-use Number::*;
-use crate::error::*;
 use crate::types::TAssums;
+use crate::value::{Arg, SciVal as V, Slice};
+use Callable::*;
+use Number::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Environ {
-    pub var_store: HashMap<String, V>,
+    var_store: HashMap<String, V>
 }
 
-impl Clone for Environ {
-    fn clone(&self) -> Environ {
-        Environ::from_map(self.var_store.clone())
-    }
-}
+// impl Clone for Environ {
+//     fn clone(&self) -> Environ {
+//         Environ::from_map(self.var_store.clone())
+//     }
+// }
 
 impl Environ {
     pub fn new() -> Environ {
-        Environ {var_store: HashMap::new()}
+        Environ{var_store: HashMap::new()}
     }
 
     pub fn from_map(m: HashMap<String, V>) -> Environ {
@@ -39,9 +39,9 @@ impl Environ {
         match stmt {
             AstStmt::Assign(v, e) => {
                 match self.evaluate(*e) {
-                    Ok(V::VCallable(Closure{env, params, app, expr, next, ..})) => {
+                    Ok(V::Callable(Closure{env, params, app, expr, next, ..})) => {
                         let name = Some(v.clone());
-                        self.var_store.insert(v, V::VCallable(Closure{env, name, params, app, expr, next}));
+                        self.var_store.insert(v, V::Callable(Closure{env, name, params, app, expr, next}));
                     }
                     Ok(evaled) => { self.var_store.insert(v, evaled); }
                     Err(e) => eprintln!("{}", e.to_string()),
@@ -64,8 +64,8 @@ impl Environ {
         }
     }
 
-    pub fn evaluate(&mut self, expr: AstExpr) -> EvalResult<V> {
-        match expr.tree {
+    pub fn evaluate(&self, expr: E) -> EvalResult<V> {
+        match expr {
             E::Binop(op, lhs, rhs) => {
                 let lhs = self.evaluate(*lhs)?;
                 let rhs = self.evaluate(*rhs)?;
@@ -91,10 +91,10 @@ impl Environ {
                 if op.eq("-") { -inner }
                 else { panic!("Unrecognized unary operator"); }
             }
-            E::ListIndex(e, slice) => {
+            E::ListIdx(e, slice) => {
                 self.evaluate(*e)?.list_slice(self.evaluate_slice(slice)?)
             }
-            E::MatrixIndex(e, rslice, cslice) => {
+            E::MatrixIdx(e, rslice, cslice) => {
                 let rslice = self.evaluate_slice(rslice)?;
                 let cslice = self.evaluate_slice(cslice)?;
                 self.evaluate(*e)?.matrix_slice(rslice, cslice)
@@ -102,7 +102,7 @@ impl Environ {
             E::Matrix(r, c, v) => {
                 let mut vret: Vec<Number> = vec![];
                 for subexpr in v {
-                    if let V::VNumber(n) = self.evaluate(subexpr)? {
+                    if let V::Number(n) = self.evaluate(subexpr)? {
                         vret.push(n);
                     } else { return Err(EvalError::TypeMismatch); }
                 }
@@ -120,7 +120,7 @@ impl Environ {
             }
             E::Str(s) => Ok(V::Str(s)),
             E::Lambda(params, inner_expr) => {
-                Ok(V::VCallable(Closure{
+                Ok(V::Callable(Closure{
                     env: self.to_owned().var_store,
                     name: None,
                     params,
@@ -130,11 +130,12 @@ impl Environ {
                 }))
             }
             E::Let(bindings, inner_expr) => {
+                let mut innerenv = self.var_store.clone();
                 for (v, e) in bindings {
                     let e_evaled = self.evaluate(e)?;
-                    self.var_store.insert(v, e_evaled);
+                    innerenv.insert(v, e_evaled);
                 }
-                self.evaluate(*inner_expr)
+                Environ::from_map(innerenv).evaluate(*inner_expr)
             }
             E::FunApp(f, args) => {
                 let mut args_evaled: Vec<Arg> = Vec::new();
@@ -156,43 +157,43 @@ impl Environ {
                 f.fun_kw_app(args_evaled)
             }
             E::Bool(b) => Ok(V::Bool(b)),
-            E::Int(n) => Ok(V::VNumber(Int(n))),
-            E::Num(n) => Ok(V::VNumber(Float(n))),
-            E::IntImag(n) => Ok(V::VNumber(IntCmplx(0, n))),
-            E::FloatImag(n) => Ok(V::VNumber(FloatCmplx(0f64, n))),
-            E::Macro(name) => Ok(V::VCallable(Macro(name, None))),
+            E::Int(n) => Ok(V::Number(Int(n))),
+            E::Num(n) => Ok(V::Number(Float(n))),
+            E::IntImag(n) => Ok(V::Number(IntCmplx(0, n))),
+            E::FloatImag(n) => Ok(V::Number(FloatCmplx(0f64, n))),
+            E::Macro(name) => Ok(V::Callable(Macro(name, None))),
             E::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())
                 } else {
-                    internals::get_internal(x)
+                    get_internal(x)
                 }
             }
         }
     }
 
     // Evaluates a slice object. Does not get rid of negative indexing.
-    fn evaluate_slice(&mut self, slice: AstSlice) -> EvalResult<Slice<i32, Option<i32>>> {
+    fn evaluate_slice(&self, slice: AstSlice) -> EvalResult<Slice<i32, Option<i32>>> {
         match slice {
             AstSlice::Single(i) => {
-                let i = if let V::VNumber(Int(i)) = self.evaluate(*i)? { i }
+                let i = if let V::Number(Int(i)) = self.evaluate(*i)? { i }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Single(i))
             }
             AstSlice::Range(Some(i), Some(j)) => {
-                let i = if let V::VNumber(Int(i)) = self.evaluate(*i)? { i }
+                let i = if let V::Number(Int(i)) = self.evaluate(*i)? { i }
                         else { return Err(EvalError::TypeMismatch); };
-                let j = if let V::VNumber(Int(j)) = self.evaluate(*j)? { j }
+                let j = if let V::Number(Int(j)) = self.evaluate(*j)? { j }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Range(i, Some(j)))
             }
             AstSlice::Range(None, Some(j)) => {
-                let j = if let V::VNumber(Int(j)) = self.evaluate(*j)? { j }
+                let j = if let V::Number(Int(j)) = self.evaluate(*j)? { j }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Range(0, Some(j)))
             }
             AstSlice::Range(Some(i), None) => {
-                let i = if let V::VNumber(Int(i)) = self.evaluate(*i)? { i }
+                let i = if let V::Number(Int(i)) = self.evaluate(*i)? { i }
                         else { return Err(EvalError::TypeMismatch); };
                 Ok(Slice::Range(i, None))
             }

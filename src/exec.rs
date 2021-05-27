@@ -9,7 +9,6 @@ use crate::callable::Callable;
 use crate::error::{EvalError, EvalResult};
 use crate::internals::get_internal;
 use crate::number::Number;
-use crate::types::TAssums;
 use crate::value::{Arg, SciVal as V, Slice};
 use Callable::*;
 use Number::*;
@@ -18,12 +17,6 @@ use Number::*;
 pub struct Environ {
     var_store: HashMap<String, V>
 }
-
-// impl Clone for Environ {
-//     fn clone(&self) -> Environ {
-//         Environ::from_map(self.var_store.clone())
-//     }
-// }
 
 impl Environ {
     pub fn new() -> Environ {
@@ -34,31 +27,24 @@ impl Environ {
         Environ {var_store: m}
     }
 
-    /// Executes a statement
-    pub fn execute(&mut self, stmt: AstStmt) {
+    /// Executes a statement and returns the output.
+    pub fn execute(&mut self, stmt: AstStmt) -> Result<String, String> {
         match stmt {
             AstStmt::Assign(v, e) => {
                 match self.evaluate(*e) {
                     Ok(V::Callable(Closure{env, params, app, expr, next, ..})) => {
                         let name = Some(v.clone());
                         self.var_store.insert(v, V::Callable(Closure{env, name, params, app, expr, next}));
+                        Ok(String::from(""))
                     }
-                    Ok(evaled) => { self.var_store.insert(v, evaled); }
-                    Err(e) => eprintln!("{}", e.to_string()),
+                    Ok(evaled) => { self.var_store.insert(v, evaled); Ok(String::from("")) }
+                    Err(e) => Err(e.to_string()),
                 }
             }
-            AstStmt::Display(mut e) => {
-                let mut typ = match e.type_check(&mut TAssums::new()) {
-                    Ok(typ) => typ,
-                    Err(err) => {
-                        eprintln!("{}", err.to_string());
-                        return;
-                    }
-                };
-                typ.normalize_type_var_names();
+            AstStmt::Display(e) => {
                 match self.evaluate(*e) {
-                    Ok(evaled) => println!("{} :: {}", evaled.to_string(), typ.to_string()),
-                    Err(err) => eprintln!("{}", err.to_string())
+                    Ok(evaled) => Ok(evaled.to_string()),
+                    Err(err) => Err(err.to_string())
                 }
             }
         }
@@ -130,12 +116,12 @@ impl Environ {
                 }))
             }
             E::Let(bindings, inner_expr) => {
-                let mut innerenv = self.var_store.clone();
+                let mut innerenv = self.clone();
                 for (v, e) in bindings {
-                    let e_evaled = self.evaluate(e)?;
-                    innerenv.insert(v, e_evaled);
+                    let e_evaled = innerenv.evaluate(e)?;
+                    innerenv.var_store.insert(v, e_evaled);
                 }
-                Environ::from_map(innerenv).evaluate(*inner_expr)
+                innerenv.evaluate(*inner_expr)
             }
             E::FunApp(f, args) => {
                 let mut args_evaled: Vec<Arg> = Vec::new();

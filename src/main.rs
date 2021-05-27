@@ -39,6 +39,7 @@ fn main() {
     }
 
     let mut environ = exec::Environ::new();
+    let mut typenv = types::TypeEnv::new();
 
     // Setup rustyline
     let mut rl = Editor::<replhelper::MyHelper>::new();
@@ -56,10 +57,30 @@ fn main() {
                 let stmt: Pair<Rule> = SciLangParser::parse(Rule::stmt, &mut line)
                     .expect("Unsuccessful parse")
                     .next().unwrap();
-                //println!("DEBUG: STMT: {:?}", stmt);
                 let ast = parser::get_ast_stmt(stmt);
-                //println!("DEBUG: AST: {:?}", ast);
-                environ.execute(ast);
+
+                match &ast {
+                    ast::AstStmt::Assign(_, _) => {
+                        match typenv.type_check_stmt(&ast) {
+                            Ok(_) => {}
+                            Err(err) => eprintln!("{}", err.to_string()),
+                        }
+                        match environ.execute(ast) {
+                            Ok(_) => {}
+                            Err(err) => eprintln!("{}", err.to_string()),
+                        }
+                    }
+                    ast::AstStmt::Display(_) => {
+                        let typ = match typenv.type_check_stmt(&ast) {
+                            Ok(typ) => typ,
+                            Err(err) => { eprintln!("{}", err.to_string()); continue; }
+                        };
+                        match environ.execute(ast) {
+                            Ok(output) => println!("{} :: {}", output, typ),
+                            Err(err) => eprintln!("{}", err.to_string())
+                        }
+                    }
+                }
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -92,7 +113,10 @@ fn interpret_file(srcfile: &str) {
         if let Some(stmt) = inner_rules.next() {
             let ast = parser::get_ast_stmt(stmt);
             //println!("DEBUG: AST: {:?}", ast);
-            environ.execute(ast);
+            match environ.execute(ast) {
+                Ok(output) => println!("{}", output),
+                Err(err) => { eprintln!("{}", err); break; }
+            }
         } else { break; }
     }
 }

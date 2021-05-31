@@ -113,7 +113,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             }
             Ok(V::List(filteredv))
         } else { Err(EvalError::TypeMismatch) }
-        "inv" => args.remove("0").unwrap().inv(),
+        "inv" => args.remove("m").unwrap().inv(),
         "join" => {
             let arg1 = if let V::Str(s) = args.remove("s").unwrap() { s }
                     else { return Err(EvalError::TypeMismatch); };

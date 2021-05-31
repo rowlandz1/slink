@@ -19,7 +19,7 @@ pub enum Type {
     Bool,
     String,
     List(Box<Type>),
-    Tuple,
+    Tuple(Vec<Type>),
     TVar(String),
     Func(Vec<Type>, Box<Type>),
     Any,    // used for ?-argument syntax
@@ -123,25 +123,26 @@ impl TypeEnv {
             E::Binop(op, lhs, rhs) => {
                 let lhs = self.type_check_helper(lhs, ta)?;
                 let rhs = self.type_check_helper(rhs, ta)?;
-                let typ1 = Type::func2(lhs, rhs, Type::TVar(ta.fresh_type_var()));
-                let typ2 = match op.as_str() {
-                    "." => Some(Type::Unknown),
-                    "+"  => get_builtin_type(&String::from("op+")),
-                    "-"  => get_builtin_type(&String::from("op-")),
-                    "*"  => get_builtin_type(&String::from("op*")),
-                    "/"  => get_builtin_type(&String::from("op/")),
-                    "%"  => get_builtin_type(&String::from("op%")),
-                    "**" => get_builtin_type(&String::from("op**")),
-                    "==" => get_builtin_type(&String::from("op==")),
-                    "!=" => get_builtin_type(&String::from("op!=")),
-                    "<=" => get_builtin_type(&String::from("op<=")),
-                    ">=" => get_builtin_type(&String::from("op>=")),
-                    "<"  => get_builtin_type(&String::from("op<")),
-                    ">"  => get_builtin_type(&String::from("op>")),
-                    "&&" => get_builtin_type(&String::from("op&&")),
-                    "||" => get_builtin_type(&String::from("op||")),
+                let mut typ2 = match op.as_str() {
+                    "."  => Some(type_of_dot(lhs.clone())),
+                    "+"  => get_builtin_type("op+"),
+                    "-"  => get_builtin_type("op-"),
+                    "*"  => get_builtin_type("op*"),
+                    "/"  => get_builtin_type("op/"),
+                    "%"  => get_builtin_type("op%"),
+                    "**" => get_builtin_type("op**"),
+                    "==" => get_builtin_type("op=="),
+                    "!=" => get_builtin_type("op!="),
+                    "<=" => get_builtin_type("op<="),
+                    ">=" => get_builtin_type("op>="),
+                    "<"  => get_builtin_type("op<"),
+                    ">"  => get_builtin_type("op>"),
+                    "&&" => get_builtin_type("op&&"),
+                    "||" => get_builtin_type("op||"),
                     _ => panic!("Unrecognized binary operator")
                 }.unwrap();
+                ta.refresh_type_vars(&mut typ2);
+                let typ1 = Type::func2(lhs, rhs, Type::TVar(ta.fresh_type_var()));
                 if let Type::Func(_, rettype) = ta.unify(typ1, typ2)? {
                     Ok(*rettype)
                 } else { unreachable!() }
@@ -155,8 +156,15 @@ impl TypeEnv {
                 }
                 Ok(Type::list(typ))
             },
+            E::Tuple(l) => {
+                if l.len() <= 0 { return Ok(Type::Tuple(Vec::new())) }
+                let mut ret: Vec<Type> = Vec::new();
+                for expr in l {
+                    ret.push(self.type_check_helper(expr, ta)?);
+                }
+                Ok(Type::Tuple(ret))
+            },
             E::Matrix(_, _, _) => Ok(Type::Matrix),
-            E::Tuple(_) => Ok(Type::Tuple),
             E::Bool(_) => Ok(Type::Bool),
             E::Str(_) => Ok(Type::String),
             E::Int(_) => Ok(Type::Num),
@@ -180,8 +188,38 @@ impl TypeEnv {
 
 impl Type {
     pub fn list(t: Type) -> Type { Type::List(Box::new(t)) }
+    pub fn tup2(t1: Type, t2: Type) -> Type { Type::Tuple(vec![t1, t2]) }
     pub fn var(v: &str) -> Type { Type::TVar(String::from(v)) }
     pub fn func1(arg: Type, ret: Type) -> Type { Type::Func(vec![arg], Box::new(ret)) }
     pub fn func2(arg1: Type, arg2: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2], Box::new(ret)) }
     pub fn func3(arg1: Type, arg2: Type, arg3: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2, arg3], Box::new(ret)) }
+}
+
+/// The "." operator takes on different types depending on the type of the first operand.
+/// This function computes what that type should be.
+fn type_of_dot(lhs: Type) -> Type {
+    match lhs {
+        Type::Func(args, ret) => match *ret {
+            Type::Tuple(rets) => Type::func2(
+                Type::Func(args.clone(), Box::new(Type::Tuple(rets.clone()))),
+                Type::Func(rets, Box::new(Type::var("A"))),
+                Type::Func(args, Box::new(Type::var("A")))
+            ),
+            ret => Type::func2(
+                Type::Func(args.clone(), Box::new(ret.clone())),
+                Type::func1(ret, Type::var("A")),
+                Type::Func(args, Box::new(Type::var("A")))
+            )
+        },
+        Type::Tuple(ts) => Type::func2(
+            Type::Tuple(ts.clone()),
+            Type::Func(ts, Box::new(Type::var("A"))),
+            Type::var("A")
+        ),
+        lhs => Type::func2(
+            lhs.clone(),
+            Type::func1(lhs, Type::var("A")),
+            Type::var("A")
+        )
+    }
 }

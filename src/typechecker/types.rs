@@ -94,6 +94,10 @@ impl TAssums {
                 let a = self.unify(*a, *b)?;
                 Ok(Type::list(a))
             }
+            (Type::Tuple(types1), Type::Tuple(types2)) => {
+                if types1.len() != types2.len() { return Err(TypeError::UnificationFailed(Type::Tuple(types1), Type::Tuple(types2))); }
+                Ok(Type::Tuple(self.unify_pairs(types1, types2)?))
+            }
             (t1, t2) => if t1 == t2 { Ok(t1) }
                                else { Err(TypeError::UnificationFailed(t1, t2)) }
         }
@@ -152,15 +156,14 @@ impl TAssums {
                     *v = newv;
                 }
             }
-            Type::List(a) => {
-                self.refresh_helper(&mut **a, h);
-            }
             Type::Func(argtypes, rettype) => {
                 for arg in argtypes {
                     self.refresh_helper(arg, h);
                 }
                 self.refresh_helper(rettype, h);
             }
+            Type::List(a) => self.refresh_helper(&mut **a, h),
+            Type::Tuple(ts) => for t in ts { self.refresh_helper(t, h); }
             _ => {}
         }
     }
@@ -174,10 +177,12 @@ impl ToString for Type {
             Type::Bool => String::from("Bool"),
             Type::String => String::from("String"),
             Type::List(a) => format!("[{}]", a.to_string()),
-            Type::Tuple => String::from("Tuple"),
             Type::TVar(s) => String::from(s),
+            Type::Tuple(ts) => {
+                format!("({})", ts.iter().map(Type::to_string).collect::<Vec<String>>().join(", "))
+            }
             Type::Func(v, r) => {
-                let params: Vec<String> = v.iter().map(|t| t.to_string()).collect();
+                let params: Vec<String> = v.iter().map(Type::to_string).collect();
                 format!("({}) -> {}", params.join(", "), r.to_string())
             }
             Type::Any => String::from("?"),
@@ -191,6 +196,7 @@ impl Type {
         match self {
             Type::TVar(v) => if v == tvar { *self = with.clone(); },
             Type::List(a) => a.replace_type_var(tvar, with),
+            Type::Tuple(ts) => for t in ts { t.replace_type_var(tvar, with); },
             Type::Func(args, ret) => {
                 for arg in args {
                     arg.replace_type_var(tvar, with);
@@ -206,6 +212,7 @@ impl Type {
         match self {
             Type::TVar(v) => v == tvar,
             Type::List(a) => a.contains_var(tvar),
+            Type::Tuple(ts) => ts.iter().any(|t| t.contains_var(tvar)),
             Type::Func(args, ret) => ret.contains_var(tvar) || args.iter().any(|arg| arg.contains_var(tvar)),
             _ => false
         }

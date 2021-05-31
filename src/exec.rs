@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::ast::{AstExpr as E, AstStmt, AstArg, AstSlice};
 use crate::callable::Callable;
 use crate::error::{EvalError, EvalResult};
-use crate::internals::get_internal;
+use crate::builtins::{get_builtin, get_macro};
 use crate::number::Number;
 use crate::value::{Arg, SciVal as V, Slice};
 use Callable::*;
@@ -55,27 +55,32 @@ impl Environ {
             E::Binop(op, lhs, rhs) => {
                 let lhs = self.evaluate(*lhs)?;
                 let rhs = self.evaluate(*rhs)?;
-                if op.eq("+") { lhs + rhs }
-                else if op.eq("-") { lhs - rhs }
-                else if op.eq("*") { lhs * rhs }
-                else if op.eq("/") { lhs * rhs.inv()? }
-                else if op.eq("%") { lhs % rhs }
-                else if op.eq("**") { lhs.pow(rhs) }
-                else if op.eq(".") { lhs.fun_comp(rhs) }
-                else if op.eq("==") { lhs.equals(&rhs) }
-                else if op.eq("!=") { lhs.not_equals(&rhs) }
-                else if op.eq("<=") { lhs.le(&rhs) }
-                else if op.eq(">=") { lhs.ge(&rhs) }
-                else if op.eq("<") { lhs.lt(&rhs) }
-                else if op.eq(">") { lhs.gt(&rhs) }
-                else if op.eq("&&") { lhs.logical_and(rhs) }
-                else if op.eq("||") {lhs.logical_or(rhs) }
-                else { panic!("Unrecognized binary operator"); }
+                match op.as_str() {
+                    "+"  => lhs + rhs,
+                    "-"  => lhs - rhs,
+                    "*"  => lhs * rhs,
+                    "/"  => lhs * rhs.inv()?,
+                    "%"  => lhs % rhs,
+                    "**" => lhs.pow(rhs),
+                    "."  => lhs.fun_comp(rhs),
+                    "==" => lhs.equals(&rhs),
+                    "!=" => lhs.not_equals(&rhs),
+                    "<=" => lhs.le(&rhs),
+                    ">=" => lhs.ge(&rhs),
+                    "<"  => lhs.lt(&rhs),
+                    ">"  => lhs.gt(&rhs),
+                    "&&" => lhs.logical_and(rhs),
+                    "||" => lhs.logical_or(rhs),
+                    _ => panic!("Unrecognized binary operator")
+                }
             }
             E::Unop(op, inner) => {
                 let inner = self.evaluate(*inner)?;
-                if op.eq("-") { -inner }
-                else { panic!("Unrecognized unary operator"); }
+                match op.as_str() {
+                    "-" => -inner,
+                    "!" => inner.logical_not(),
+                    _ => panic!("Unrecognized unary operator")
+                }
             }
             E::ListIdx(e, slice) => {
                 self.evaluate(*e)?.list_slice(self.evaluate_slice(slice)?)
@@ -147,12 +152,12 @@ impl Environ {
             E::Num(n) => Ok(V::Number(Float(n))),
             E::IntImag(n) => Ok(V::Number(IntCmplx(0, n))),
             E::FloatImag(n) => Ok(V::Number(FloatCmplx(0f64, n))),
-            E::Macro(name) => Ok(V::Callable(Macro(name, None))),
+            E::Macro(name) => get_macro(&name).ok_or(EvalError::UndefinedIdentifier(name)),
             E::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())
                 } else {
-                    get_internal(x)
+                    get_builtin(&x).ok_or(EvalError::UndefinedIdentifier(x))
                 }
             }
         }

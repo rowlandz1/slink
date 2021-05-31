@@ -7,8 +7,7 @@ use std::collections::HashMap;
 use crate::ast::AstExpr;
 use crate::error::{EvalError, EvalResult};
 use crate::exec::Environ;
-use crate::internals::apply_to_internal;
-use crate::macros::apply_to_macro;
+use crate::builtins::{eval_builtin_function, eval_macro};
 use crate::value::{Arg, Slice, SciVal};
 use Callable::*;
 
@@ -61,7 +60,7 @@ impl Callable {
                 env.extend(app.into_iter());
                 let result = match expr {
                     Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                    Err(name) => apply_to_internal(name, env),
+                    Err(name) => eval_builtin_function(name, env),
                 };
                 let result = match result {
                     Ok(v) => v,
@@ -87,7 +86,7 @@ impl Callable {
                     Arg::Val(v) => { newargs.push(*v); }
                 }
             }
-            let result = apply_to_macro(name, newargs)?;
+            let result = eval_macro(name, newargs)?;
             match next {
                 Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
                 None => Ok(result),
@@ -138,7 +137,7 @@ impl Callable {
                  env.extend(app.into_iter());
                  let result = match expr {
                      Ok(expr) => Environ::from_map(env).evaluate(*expr),
-                     Err(name) => apply_to_internal(name, env),
+                     Err(name) => eval_builtin_function(name, env),
                  };
                  let result = match result {
                      Ok(v) => v,

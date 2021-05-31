@@ -173,7 +173,7 @@ impl SciVal {
     }
 
     pub fn not_equals(&self, rhs: &SciVal) -> EvalResult<SciVal> {
-        self.equals(rhs)?.negate()
+        self.equals(rhs)?.logical_not()
     }
 
     pub fn compare(&self, rhs: &SciVal) -> EvalResult<cmp::Ordering> {
@@ -213,23 +213,19 @@ impl SciVal {
         }
     }
 
-    pub fn negate(&self) -> EvalResult<SciVal> {
-        if let V::Bool(b) = self { Ok(V::Bool(!b)) }
+    pub fn logical_and(self, rhs: SciVal) -> EvalResult<SciVal> {
+        if let (V::Bool(b1), V::Bool(b2)) = (self, rhs) { Ok(V::Bool(b1 && b2)) }
         else { Err(EvalError::TypeMismatch) }
     }
 
-    pub fn logical_and(self, rhs: SciVal) -> EvalResult<SciVal> {
-        match (self, rhs) {
-            (V::Bool(b1), V::Bool(b2)) => Ok(V::Bool(b1 && b2)),
-            _ => Err(EvalError::TypeMismatch)
-        }
+    pub fn logical_or(self, rhs: SciVal) -> EvalResult<SciVal> {
+        if let (V::Bool(b1), V::Bool(b2)) = (self, rhs) { Ok(V::Bool(b1 || b2)) }
+        else { Err(EvalError::TypeMismatch) }
     }
 
-    pub fn logical_or(self, rhs: SciVal) -> EvalResult<SciVal> {
-        match (self, rhs) {
-            (V::Bool(b1), V::Bool(b2)) => Ok(V::Bool(b1 || b2)),
-            _ => Err(EvalError::TypeMismatch)
-        }
+    pub fn logical_not(self) -> EvalResult<SciVal> {
+        if let V::Bool(b) = self { Ok(V::Bool(!b)) }
+        else { Err(EvalError::TypeMismatch) }
     }
 }
 

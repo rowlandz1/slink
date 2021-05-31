@@ -3,8 +3,6 @@
  * Defines evaluation errors and error messages.
  */
 
-use crate::types::Type;
-
 #[derive(Debug)]
 pub enum EvalError {
     InvalidMatrixShape,
@@ -65,30 +63,6 @@ impl ToString for EvalError {
             }
             EvalError::InResolvedExpr(innererr, f) => {
                 format!("In resolved expression of {}\n{}", f, innererr.to_string())
-            }
-        }
-    }
-}
-
-pub enum TypeError {
-    UnknownIdentifier(String),
-    UnificationFailed(Type, Type),
-    ArgumentListTooLong,
-}
-
-pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
-
-impl ToString for TypeError {
-    fn to_string(&self) -> String {
-        match self {
-            TypeError::UnknownIdentifier(id) => {
-                format!("TypeError: unknown identifier '{}'", id)
-            }
-            TypeError::UnificationFailed(t1, t2) => {
-                format!("TypeError: cannot unify types {} and {}", t1.to_string(), t2.to_string())
-            }
-            TypeError::ArgumentListTooLong => {
-                format!("TypeError: argument list is too long")
             }
         }
     }

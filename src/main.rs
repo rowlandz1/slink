@@ -1,16 +1,15 @@
-mod parser;
-mod exec;
 mod ast;
-mod internals;
+mod builtins;
+mod callable;
+mod error;
+mod exec;
+mod matrix;
+mod number;
+mod parser;
 mod print;
 mod replhelper;
-mod error;
-mod number;
-mod matrix;
+mod typechecker;
 mod value;
-mod macros;
-mod callable;
-mod types;
 
 extern crate pest;
 #[macro_use]
@@ -39,7 +38,7 @@ fn main() {
     }
 
     let mut environ = exec::Environ::new();
-    let mut typenv = types::TypeEnv::new();
+    let mut typenv = typechecker::TypeEnv::new();
 
     // Setup rustyline
     let mut rl = Editor::<replhelper::MyHelper>::new();
@@ -77,6 +76,7 @@ fn main() {
                         };
                         match environ.execute(ast) {
                             Ok(output) => println!("{} :: {}", output, typ),
+                        //    Ok(output) => println!("{}", output),
                             Err(err) => eprintln!("{}", err.to_string())
                         }
                     }

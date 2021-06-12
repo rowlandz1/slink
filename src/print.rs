@@ -53,13 +53,13 @@ impl ToString for Callable {
                 }
                 format!("lam {}{} -> *", params.join(" "), appstring)
             }
-            Callable::Macro(name, _) => {
+            Callable::Macro(name, ..) => {
                 format!("<macro: {}>", name)
             }
-            Callable::ListSlice(_, _) => {
+            Callable::ListSlice(_, ..) => {
                 format!("<slice>")
             }
-            Callable::MatrixSlice(_, _, _) => {
+            Callable::MatrixSlice(_, _, ..) => {
                 format!("<matrix slice>")
             }
         }

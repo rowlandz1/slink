@@ -10,6 +10,7 @@ use crate::exec::Environ;
 use crate::builtins::{eval_builtin_function, eval_macro};
 use crate::value::{Arg, Slice, SciVal};
 use Callable::*;
+use NextCall::*;
 
 #[derive(Debug, Clone)]
 pub enum Callable {
@@ -19,32 +20,32 @@ pub enum Callable {
         params: Vec<String>,                    // unapplied parameter list
         app: HashMap<String, SciVal>,           // applied parameters
         expr: Result<Box<AstExpr>, String>,     // inner expression (or string for internal functions)
-        next: Option<Box<Callable>>,              // if Some(v), then this closure is the first in a composition
+        next: NextCall,                         // for function composition
     },
-    Macro(String, Option<Box<Callable>>),         // name, next
-    ListSlice(Slice<i32, Option<i32>>, Option<Box<Callable>>),
-    MatrixSlice(Slice<i32, Option<i32>>, Slice<i32, Option<i32>>, Option<Box<Callable>>),
+    Macro(String, NextCall),                    // name, next
+    ListSlice(Slice<i32, Option<i32>>, NextCall),
+    MatrixSlice(Slice<i32, Option<i32>>, Slice<i32, Option<i32>>, NextCall),
+}
+
+#[derive(Debug, Clone)]
+pub enum NextCall {
+    NoNext,
+    Next(Box<Callable>),
+    NextUnpack(Box<Callable>),
 }
 
 impl Callable {
-    // Unpacks top-level tuple values from an argument list.
-    // Used by fun_app
-    fn flatten_arg_list(args: Vec<Arg>) -> Vec<Arg> {
-        let mut newargs: Vec<Arg> = Vec::new();
-        for arg in args {
-            match arg {
-                Arg::Question => { newargs.push(Arg::Question); }
-                Arg::Val(v) => if let SciVal::Tuple(v) = *v {
-                    for va in v { newargs.push(Arg::Val(Box::new(va))); }
-                } else { newargs.push(Arg::Val(v)); }
-            }
-        }
-        newargs
+    pub fn closure(env: HashMap<String, SciVal>, name: Option<String>, params: Vec<String>,
+                   app: HashMap<String, SciVal>, expr: Result<AstExpr, String>) -> Callable {
+        Closure{env, name, params, app, expr: expr.map(|t|{Box::new(t)}), next: NoNext}
     }
 
-    // Function application with a normal argument list
+    pub fn mk_macro(name: String) -> Callable { Macro(name, NoNext) }
+    pub fn mk_list_slice(slice: Slice<i32, Option<i32>>) -> Callable { ListSlice(slice, NoNext) }
+    pub fn mk_matrix_slice(slice1: Slice<i32, Option<i32>>, slice2: Slice<i32, Option<i32>>) -> Callable { MatrixSlice(slice1, slice2, NoNext) }
+
+    /// Function application with a normal argument list
     pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
-        let args = Self::flatten_arg_list(args);
         if let Closure{mut env, name, mut params, mut app, expr, next} = self {
             if params.len() < args.len() {
                 return Err(EvalError::ArityMismatch);
@@ -71,12 +72,14 @@ impl Callable {
                     }
                 };
                 match next {
-                    Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                    None => Ok(result),
+                    NoNext => Ok(result),
+                    Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                    NextUnpack(next) => if let SciVal::Tuple(values) = result {
+                        let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
+                        next.fun_app(values)
+                    } else { Err(EvalError::NothingToUnpack) }
                 }
-            } else {
-                Ok(SciVal::Callable(Closure{env, name, params, app, expr, next}))
-            }
+            } else { Ok(SciVal::Callable(Closure{env, name, params, app, expr, next})) }
         }
         else if let Macro(name, next) = self {
             let mut newargs: Vec<SciVal> = Vec::new();
@@ -88,8 +91,12 @@ impl Callable {
             }
             let result = eval_macro(name, newargs)?;
             match next {
-                Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                None => Ok(result),
+                NoNext => Ok(result),
+                Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                NextUnpack(next) => if let SciVal::Tuple(values) = result {
+                    let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
+                    next.fun_app(values)
+                } else { Err(EvalError::NothingToUnpack) }
             }
         }
         else if let ListSlice(slice, next) = self {
@@ -100,8 +107,12 @@ impl Callable {
             };
             let result = v.list_slice(slice)?;
             match next {
-                Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                None => Ok(result),
+                NoNext => Ok(result),
+                Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                NextUnpack(next) => if let SciVal::Tuple(values) = result {
+                    let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
+                    next.fun_app(values)
+                } else { Err(EvalError::NothingToUnpack) }
             }
         }
         else if let MatrixSlice(slice1, slice2, next) = self {
@@ -112,8 +123,12 @@ impl Callable {
             };
             let result = v.matrix_slice(slice1, slice2)?;
             match next {
-                Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                None => Ok(result),
+                NoNext => Ok(result),
+                Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                NextUnpack(next) => if let SciVal::Tuple(values) = result {
+                    let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
+                    next.fun_app(values)
+                } else { Err(EvalError::NothingToUnpack) }
             }
         }
         else { Err(EvalError::TypeMismatch) }
@@ -148,9 +163,13 @@ impl Callable {
                      }
                  };
                  match next {
-                     Some(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                     None => Ok(result),
-                 }
+                    NoNext => Ok(result),
+                    Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
+                    NextUnpack(next) => if let SciVal::Tuple(values) = result {
+                        let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
+                        next.fun_app(values)
+                    } else { Err(EvalError::NothingToUnpack) }
+                }
              } else {
                  Ok(SciVal::Callable(Closure{env, name, params, app, expr, next}))
              }
@@ -158,36 +177,71 @@ impl Callable {
          } else { Err(EvalError::TypeMismatch) }
     }
 
-    // function composition
+    /// function composition
     pub fn fun_comp(self, other: Callable) -> EvalResult<Callable> {
         match self {
             Closure { env, name, params, app, expr, next } => {
                 let newnext = match next {
-                    Some(next) => next.fun_comp(other)?,
-                    None => other,
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
                 };
-                Ok(Closure{env, name, params, app, expr, next: Some(Box::new(newnext))})
+                Ok(Closure{env, name, params, app, expr, next: Next(Box::new(newnext))})
             }
             Macro(name, next) => {
                 let newnext = match next {
-                    Some(next) => next.fun_comp(other)?,
-                    None => other,
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
                 };
-                Ok(Macro(name, Some(Box::new(newnext))))
+                Ok(Macro(name, Next(Box::new(newnext))))
             }
             ListSlice(slice, next) => {
                 let newnext = match next {
-                    Some(next) => next.fun_comp(other)?,
-                    None => other,
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
                 };
-                Ok(ListSlice(slice, Some(Box::new(newnext))))
+                Ok(ListSlice(slice, Next(Box::new(newnext))))
             }
             MatrixSlice(slice1, slice2, next) => {
                 let newnext = match next {
-                    Some(next) => next.fun_comp(other)?,
-                    None => other,
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
                 };
-                Ok(MatrixSlice(slice1, slice2, Some(Box::new(newnext))))
+                Ok(MatrixSlice(slice1, slice2, Next(Box::new(newnext))))
+            }
+        }
+    }
+
+    /// function composition, but if the first function returns a tuple, then
+    /// the tuple contents are unpacked into the arguments of the second function.
+    pub fn fun_comp_unpack(self, other: Callable) -> EvalResult<Callable> {
+        match self {
+            Closure { env, name, params, app, expr, next } => {
+                let newnext = match next {
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                };
+                Ok(Closure{env, name, params, app, expr, next: NextUnpack(Box::new(newnext))})
+            }
+            Macro(name, next) => {
+                let newnext = match next {
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                };
+                Ok(Macro(name, NextUnpack(Box::new(newnext))))
+            }
+            ListSlice(slice, next) => {
+                let newnext = match next {
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                };
+                Ok(ListSlice(slice, NextUnpack(Box::new(newnext))))
+            }
+            MatrixSlice(slice1, slice2, next) => {
+                let newnext = match next {
+                    NoNext => other,
+                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                };
+                Ok(MatrixSlice(slice1, slice2, NextUnpack(Box::new(newnext))))
             }
         }
     }

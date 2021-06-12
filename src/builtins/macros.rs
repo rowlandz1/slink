@@ -6,7 +6,7 @@
 use crate::error::{EvalError, EvalResult};
 use crate::number::Number::Int;
 use crate::value::SciVal;
-use crate::callable::Callable::Macro;
+use crate::callable::Callable;
 
 pub fn get_macro(name: String) -> Option<SciVal> {
     match name.as_str() {
@@ -14,7 +14,7 @@ pub fn get_macro(name: String) -> Option<SciVal> {
         "list!" |
         "snd!" |
         "sum!" |
-        "zip!" => Some(SciVal::Callable(Macro(name, None))),
+        "zip!" => Some(SciVal::Callable(Callable::mk_macro(name))),
         _ => None
     }
 }

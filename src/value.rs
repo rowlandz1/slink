@@ -12,7 +12,6 @@ use crate::callable::Callable;
 use crate::error::{EvalError, EvalResult};
 use crate::matrix;
 use crate::number::Number;
-use Callable::*;
 use Number::*;
 use SciVal as V;
 
@@ -63,6 +62,19 @@ impl SciVal {
         }
     }
 
+    /// Same as fun_comp except tuples are unpacked into the arguments of
+    /// the second function.
+    pub fn fun_comp_unpack(self, other: SciVal) -> EvalResult<SciVal> {
+        match (self, other) {
+            (V::Callable(f1), V::Callable(f2)) => Ok(V::Callable(f1.fun_comp_unpack(f2)?)),
+            (V::Tuple(args), V::Callable(f2)) => {
+                let args: Vec<Arg> = args.into_iter().map(|arg|{Arg::Val(Box::new(arg))}).collect();
+                f2.fun_app(args)
+            },
+            _ => Err(EvalError::TypeMismatch)
+        }
+    }
+
     // Slicing can be applied to lists, strings, or callable values. Slicing
     // matrices is handled differently.
     pub fn list_slice(self, slice: Slice<i32, Option<i32>>) -> EvalResult<SciVal> {
@@ -86,7 +98,7 @@ impl SciVal {
                 }
             }
             V::Callable(f) => {
-                Ok(V::Callable(f.fun_comp(ListSlice(slice, None))?))
+                Ok(V::Callable(f.fun_comp(Callable::mk_list_slice(slice))?))
             }
             _ => Err(EvalError::TypeMismatch)
         }
@@ -105,7 +117,7 @@ impl SciVal {
                 Ok(V::Matrix(r, c, v))
             }
             V::Callable(f) => {
-                Ok( V::Callable(f.fun_comp(MatrixSlice(slice1, slice2, None))?))
+                Ok( V::Callable(f.fun_comp(Callable::mk_matrix_slice(slice1, slice2))?))
             }
              _ => Err(EvalError::TypeMismatch)
          }

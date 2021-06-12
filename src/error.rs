@@ -17,6 +17,7 @@ pub enum EvalError {
     DivideByZero,
     QuestionMarkMacroArg,
     InvalidKeywordArgument,
+    NothingToUnpack,
     InResolvedExpr(Box<EvalError>, String),
 }
 
@@ -60,6 +61,9 @@ impl ToString for EvalError {
             }
             EvalError::InvalidKeywordArgument => {
                 format!("Error: invalid keyword argument")
+            }
+            EvalError::NothingToUnpack => {
+                format!("Error: cannot unpack a non-tuple value")
             }
             EvalError::InResolvedExpr(innererr, f) => {
                 format!("In resolved expression of {}\n{}", f, innererr.to_string())

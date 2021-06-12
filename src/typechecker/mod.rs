@@ -124,7 +124,8 @@ impl TypeEnv {
                 let lhs = self.type_check_helper(lhs, ta)?;
                 let rhs = self.type_check_helper(rhs, ta)?;
                 let mut typ2 = match op.as_str() {
-                    "."  => Some(type_of_dot(lhs.clone())),
+                    "."  => return self.type_check_dot(lhs, rhs, ta),
+                    "$"  => return self.type_check_dollar(lhs, rhs, ta),
                     "+"  => get_builtin_type("op+"),
                     "-"  => get_builtin_type("op-"),
                     "*"  => get_builtin_type("op*"),
@@ -158,13 +159,20 @@ impl TypeEnv {
             },
             E::Tuple(l) => {
                 if l.len() <= 0 { return Ok(Type::Tuple(Vec::new())) }
-                let mut ret: Vec<Type> = Vec::new();
+                let n = l.len();
                 for expr in l {
-                    ret.push(self.type_check_helper(expr, ta)?);
+                    let t = self.type_check_helper(expr, ta)?;
+                    ta.push_type(t);
                 }
-                Ok(Type::Tuple(ret))
+                Ok(Type::Tuple(ta.pop_types(n)))
             },
-            E::Matrix(_, _, _) => Ok(Type::Matrix),
+            E::Matrix(_, _, v) => {
+                for x in v {
+                    let t = self.type_check_helper(x, ta)?;
+                    ta.unify(Type::Num, t)?;
+                }
+                Ok(Type::Matrix)
+            },
             E::Bool(_) => Ok(Type::Bool),
             E::Str(_) => Ok(Type::String),
             E::Int(_) => Ok(Type::Num),
@@ -184,6 +192,46 @@ impl TypeEnv {
             _ => Ok(Type::Unknown)
         }
     }
+
+    /// Type check a dot expression given the left and right expression types
+    fn type_check_dot(&self, lhs: Type, rhs: Type, ta: &mut TAssums) -> TypeCheckResult<Type> {
+        match (lhs, rhs) {
+            (Type::Func(args1, ret1), Type::Func(mut args2, ret2)) => {
+                if args2.len() != 1 { return Err(TypeError::ArgumentListTooLong); }
+                ta.push_type(Type::Func(args1, ret2));
+                ta.unify(*ret1, args2.pop().unwrap())?;
+                Ok(ta.pop_type())
+            }
+            (lhs, Type::Func(mut args2, ret2)) => {
+                if args2.len() != 1 { return Err(TypeError::ArgumentListTooLong); }
+                ta.push_type(*ret2);
+                ta.unify(lhs, args2.pop().unwrap())?;
+                Ok(ta.pop_type())
+            }
+            _ => Err(TypeError::InvalidOperand)
+        }
+    }
+
+    /// Type check a dollar expression given the left and right expression types
+    fn type_check_dollar(&self, lhs: Type, rhs: Type, ta: &mut TAssums) -> TypeCheckResult<Type> {
+        match (lhs, rhs) {
+            (Type::Func(args1, ret1), Type::Func(args2, ret2)) => {
+                if let Type::Tuple(ret1) = *ret1 {
+                    if args2.len() != ret1.len() { return Err(TypeError::InvalidOperand); }
+                    ta.push_type(Type::Func(args1, ret2));
+                    ta.unify_pairs(ret1, args2)?;
+                    Ok(ta.pop_type())
+                } else { Err(TypeError::InvalidOperand) }
+            }
+            (Type::Tuple(lhs), Type::Func(args2, ret2)) => {
+                if args2.len() != lhs.len() { return Err(TypeError::InvalidOperand); }
+                ta.push_type(*ret2);
+                ta.unify_pairs(lhs, args2)?;
+                Ok(ta.pop_type())
+            }
+            _ => Err(TypeError::InvalidOperand)
+        }
+    }
 }
 
 impl Type {
@@ -193,33 +241,4 @@ impl Type {
     pub fn func1(arg: Type, ret: Type) -> Type { Type::Func(vec![arg], Box::new(ret)) }
     pub fn func2(arg1: Type, arg2: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2], Box::new(ret)) }
     pub fn func3(arg1: Type, arg2: Type, arg3: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2, arg3], Box::new(ret)) }
-}
-
-/// The "." operator takes on different types depending on the type of the first operand.
-/// This function computes what that type should be.
-fn type_of_dot(lhs: Type) -> Type {
-    match lhs {
-        Type::Func(args, ret) => match *ret {
-            Type::Tuple(rets) => Type::func2(
-                Type::Func(args.clone(), Box::new(Type::Tuple(rets.clone()))),
-                Type::Func(rets, Box::new(Type::var("A"))),
-                Type::Func(args, Box::new(Type::var("A")))
-            ),
-            ret => Type::func2(
-                Type::Func(args.clone(), Box::new(ret.clone())),
-                Type::func1(ret, Type::var("A")),
-                Type::Func(args, Box::new(Type::var("A")))
-            )
-        },
-        Type::Tuple(ts) => Type::func2(
-            Type::Tuple(ts.clone()),
-            Type::Func(ts, Box::new(Type::var("A"))),
-            Type::var("A")
-        ),
-        lhs => Type::func2(
-            lhs.clone(),
-            Type::func1(lhs, Type::var("A")),
-            Type::var("A")
-        )
-    }
 }

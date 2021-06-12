@@ -63,6 +63,7 @@ impl Environ {
                     "%"  => lhs % rhs,
                     "**" => lhs.pow(rhs),
                     "."  => lhs.fun_comp(rhs),
+                    "$"  => lhs.fun_comp_unpack(rhs),
                     "==" => lhs.equals(&rhs),
                     "!=" => lhs.not_equals(&rhs),
                     "<=" => lhs.le(&rhs),
@@ -111,14 +112,7 @@ impl Environ {
             }
             E::Str(s) => Ok(V::Str(s)),
             E::Lambda(params, inner_expr) => {
-                Ok(V::Callable(Closure{
-                    env: self.to_owned().var_store,
-                    name: None,
-                    params,
-                    app: HashMap::new(),
-                    expr: Ok(inner_expr),
-                    next: None
-                }))
+                Ok(V::Callable(Callable::closure(self.to_owned().var_store, None, params, HashMap::new(), Ok(*inner_expr))))
             }
             E::Let(bindings, inner_expr) => {
                 let mut innerenv = self.clone();

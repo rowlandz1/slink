@@ -12,7 +12,6 @@ use crate::error::{EvalError, EvalResult};
 use crate::matrix::matrix_det;
 use crate::number::Number;
 use crate::value::{Arg, SciVal as V};
-use Callable::Closure;
 use Number::{Float, Int};
 
 pub fn get_builtin_function(name: &String) -> Option<V> {
@@ -28,6 +27,7 @@ pub fn get_builtin_function(name: &String) -> Option<V> {
         "join"      => vec!["l", "s"],
         "len"       => vec!["l"],
         "map"       => vec!["l", "f"],
+        "map2"      => vec!["l", "f"],
         "max"       => vec!["l"],
         "num"       => vec!["v"],
         "op+"       => vec!["x", "y"],
@@ -52,14 +52,7 @@ pub fn get_builtin_function(name: &String) -> Option<V> {
         _ => { return None; }
     }.into_iter().map(|x| x.to_string()).collect();
 
-    Some(V::Callable(Closure{
-        env: HashMap::new(),
-        name: None,
-        params,
-        app: HashMap::new(),
-        expr: Err(name.clone()),
-        next: None
-    }))
+    Some(V::Callable(Callable::closure(HashMap::new(), None, params, HashMap::new(), Err(name.clone()))))
 }
 
 /// NOTE: Arity mismatches need to be checked BEFORE calling this function.
@@ -138,6 +131,24 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
                 mappedv.push(x);
             }
             Ok(V::List(mappedv))
+        } else { Err(EvalError::TypeMismatch) }
+        "map2" => if let V::List(v) = args.remove("l").unwrap() {
+            let f = args.remove("f").unwrap();
+            let mut left: Vec<V> = Vec::new();
+            let mut right: Vec<V> = Vec::new();
+            for x in v {
+                if let V::Tuple(mut inner) = x {
+                    if inner.len() == 2 {
+                        right.push(inner.pop().unwrap());
+                        left.push(inner.pop().unwrap());
+                    } else { return Err(EvalError::TypeMismatch); }
+                } else { return Err(EvalError::TypeMismatch); }
+            }
+            let mut res: Vec<V> = Vec::new();
+            for (l, r) in left.into_iter().zip(right) {
+                res.push(f.clone().fun_app(vec![Arg::Val(Box::new(l)), Arg::Val(Box::new(r))])?);
+            }
+            Ok(V::List(res))
         } else { Err(EvalError::TypeMismatch) }
         "max" => match args.remove("l").unwrap() {
             V::List(v) => {

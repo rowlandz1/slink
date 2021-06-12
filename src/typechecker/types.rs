@@ -53,6 +53,8 @@ impl TAssums {
     pub fn push_type(&mut self, typ: Type) { self.type_stack.push(typ); }
     /// Pop a type from the type stack. The stack must be non-empty.
     pub fn pop_type(&mut self) -> Type { self.type_stack.pop().unwrap() }
+    /// Pop n types at once. Types that were pushed first will be at start of returned vector.
+    pub fn pop_types(&mut self, n: usize) -> Vec<Type> { let at = self.type_stack.len() - n; self.type_stack.split_off(at) }
 
     /// Lookup the assumed type for the given id.
     pub fn get(&self, id: &String) -> Option<Type> {

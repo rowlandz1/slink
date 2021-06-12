@@ -17,8 +17,8 @@ BINOP3    = @{ "+" | "-" }
 BINOP4    = @{ "*" | "/" | "%" }
 BINOP5    = @{ "**" }
 UNOP6     = @{ "-" }
-BINOP7    = @{ "." }
-QUEST     = @{ "?" }
+BINOP7    = @{ "." | "$" }
+QUEST     = @{ "_" }
 
 prog = { stmt* }
 

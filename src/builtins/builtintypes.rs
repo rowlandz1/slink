@@ -19,6 +19,7 @@ pub fn get_builtin_type(name: &str) -> Option<T> {
         "join"      => T::func2(T::list(T::String), T::String, T::String),
         "len"       => T::func1(T::list(T::var("A")), T::Num),
         "map"       => T::func2(T::list(T::var("A")), T::func1(T::var("A"), T::var("B")), T::list(T::var("B"))),
+        "map2"      => T::func2(T::list(T::tup2(T::var("A"), T::var("B"))), T::func2(T::var("A"), T::var("B"), T::var("C")), T::list(T::var("C"))),
         "max"       => T::func1(T::list(T::Num), T::Num),
         "num"       => T::func1(T::String, T::Num),
         "op+"       => T::func2(T::Num, T::Num, T::Num),

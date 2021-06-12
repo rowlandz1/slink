@@ -16,7 +16,7 @@ BINOP2    = @{ "==" | "!=" | "<=" | ">=" | "<" | ">" }
 BINOP3    = @{ "+" | "-" }
 BINOP4    = @{ "*" | "/" | "%" }
 BINOP5    = @{ "**" }
-UNOP6     = @{ "-" }
+UNOP6     = @{ "-" | "!" }
 BINOP7    = @{ "." | "$" }
 QUEST     = @{ "_" }
 
@@ -45,7 +45,7 @@ expr_base = {
     matrix
   | list
   | lam_expr
-  | let_expr
+//  | let_expr
   | tuple
   | "(" ~ expr ~ ")"
   | bool

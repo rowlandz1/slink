@@ -40,20 +40,20 @@ impl TypeEnv {
     pub fn type_check_stmt(&mut self, stmt: &AstStmt) -> TypeCheckResult<String> {
         match stmt {
             AstStmt::Assign(v, expr) => {
-                let mut typ = self.type_check(expr)?;
-                typ.normalize_type_var_names();
+                let typ = self.type_check(expr)?.normalize_type_var_names();
                 self.var_types.insert(v.clone(), typ);
                 Ok(String::from(""))
             }
             AstStmt::Display(expr) => {
-                let mut typ = self.type_check(expr)?;
-                typ.normalize_type_var_names();
+                let typ = self.type_check(expr)?.normalize_type_var_names();
                 Ok(typ.to_string())
             }
         }
     }
 
-    /// Performs type checking for expressions.
+    /// Essentially a "get type" function for expressions, but examination of the
+    /// expression can result in type refinement of other expressions. For example,
+    /// `x + 1` must be a `Num`. So `(x, x + 1)` must be `(Num, Num)`, not `(A, Num)`
     pub fn type_check(&self, expr: &E) -> TypeCheckResult<Type> {
         self.type_check_helper(expr, &mut TAssums::new())
     }
@@ -70,7 +70,7 @@ impl TypeEnv {
             }
             E::FunApp(f, args) => {
                 // type check each of the argument expressions
-                for arg in args.iter().rev() {
+                for arg in args.iter() {
                     match arg {
                         AstArg::Question => ta.push_type(Type::Any),
                         AstArg::Expr(e) => {
@@ -84,10 +84,7 @@ impl TypeEnv {
                 let ftype = self.type_check_helper(f, ta)?;
 
                 // retrieve (possibly) modified argument types
-                let mut argtypes: Vec<Type> = Vec::new();
-                for _ in 0..args.len() {
-                    argtypes.push(ta.pop_type());
-                }
+                let mut argtypes = ta.pop_types(args.len());
 
                 // If partial application is happening (including ?-syntax), partially-curry
                 // the function type (e.g. (A,B,C) -> D becomes (B,C) -> (A) -> D).
@@ -120,10 +117,14 @@ impl TypeEnv {
                     Ok(*rettype)
                 } else { unreachable!() }
             }
+            E::FunKwApp(_f, _args) => Ok(Type::Unknown),
+            E::Macro(_) => Ok(Type::Unknown),
+            E::ListIdx(_expr, _slice) => Ok(Type::Unknown),
+            E::MatrixIdx(_expr, _slice1, _slice2) => Ok(Type::Unknown),
             E::Binop(op, lhs, rhs) => {
                 let lhs = self.type_check_helper(lhs, ta)?;
                 let rhs = self.type_check_helper(rhs, ta)?;
-                let mut typ2 = match op.as_str() {
+                let typ2 = match op.as_str() {
                     "."  => return self.type_check_dot(lhs, rhs, ta),
                     "$"  => return self.type_check_dollar(lhs, rhs, ta),
                     "+"  => get_builtin_type("op+"),
@@ -138,12 +139,23 @@ impl TypeEnv {
                     ">=" => get_builtin_type("op>="),
                     "<"  => get_builtin_type("op<"),
                     ">"  => get_builtin_type("op>"),
-                    "&&" => get_builtin_type("op&&"),
-                    "||" => get_builtin_type("op||"),
+                    "&&" => Some(Type::func2(Type::Bool, Type::Bool, Type::Bool)),
+                    "||" => Some(Type::func2(Type::Bool, Type::Bool, Type::Bool)),
                     _ => panic!("Unrecognized binary operator")
-                }.unwrap();
-                ta.refresh_type_vars(&mut typ2);
+                }.unwrap().refresh_type_vars(ta);
                 let typ1 = Type::func2(lhs, rhs, Type::TVar(ta.fresh_type_var()));
+                if let Type::Func(_, rettype) = ta.unify(typ1, typ2)? {
+                    Ok(*rettype)
+                } else { unreachable!() }
+            }
+            E::Unop(op, expr) => {
+                let typ1 = self.type_check_helper(expr, ta)?;
+                let typ2 = match op.as_str() {
+                    "-" => Type::func1(Type::Num, Type::Num),
+                    "!" => Type::func1(Type::Bool, Type::Bool),
+                    _   => panic!("Unrecognized unary operator")
+                }.refresh_type_vars(ta);
+                let typ1 = Type::func1(typ1, Type::TVar(ta.fresh_type_var()));
                 if let Type::Func(_, rettype) = ta.unify(typ1, typ2)? {
                     Ok(*rettype)
                 } else { unreachable!() }
@@ -181,21 +193,17 @@ impl TypeEnv {
             E::FloatImag(_) => Ok(Type::Num),
             E::Id(x) => {
                 if let Some(t) = ta.get(x) { Ok(t) }
-                else if let Some(t) = self.var_types.get(x) {
-                    let mut t = t.clone();
-                    ta.refresh_type_vars(&mut t);
-                    Ok(t)
-                }
-                else if let Some(mut t) = get_builtin_type(x) { ta.refresh_type_vars(&mut t); Ok(t) }
+                else if let Some(t) = self.var_types.get(x) { Ok(t.clone().refresh_type_vars(ta)) }
+                else if let Some(t) = get_builtin_type(x)   { Ok(t.refresh_type_vars(ta)) }
                 else { Err(TypeError::UnknownIdentifier(x.clone())) }
-            },
-            _ => Ok(Type::Unknown)
+            }
         }
     }
 
     /// Type check a dot expression given the left and right expression types
     fn type_check_dot(&self, lhs: Type, rhs: Type, ta: &mut TAssums) -> TypeCheckResult<Type> {
         match (lhs, rhs) {
+            (Type::TVar(_), _) => Err(TypeError::CannotTypeCheckDot),
             (Type::Func(args1, ret1), Type::Func(mut args2, ret2)) => {
                 if args2.len() != 1 { return Err(TypeError::ArgumentListTooLong); }
                 ta.push_type(Type::Func(args1, ret2));
@@ -208,7 +216,14 @@ impl TypeEnv {
                 ta.unify(lhs, args2.pop().unwrap())?;
                 Ok(ta.pop_type())
             }
-            _ => Err(TypeError::InvalidOperand)
+            (lhs, rhs) => {
+                let lhstype = Type::TVar(ta.fresh_type_var());
+                let rettype = Type::TVar(ta.fresh_type_var());
+                let rhstype = Type::func1(lhstype.clone(), rettype.clone());
+                ta.push_type(rettype);
+                ta.unify_pairs(vec![lhstype, rhstype], vec![lhs, rhs])?;
+                Ok(ta.pop_type())
+            }
         }
     }
 
@@ -217,19 +232,33 @@ impl TypeEnv {
         match (lhs, rhs) {
             (Type::Func(args1, ret1), Type::Func(args2, ret2)) => {
                 if let Type::Tuple(ret1) = *ret1 {
-                    if args2.len() != ret1.len() { return Err(TypeError::InvalidOperand); }
+                    if args2.len() != ret1.len() { return Err(TypeError::ArityMistmatch); }
                     ta.push_type(Type::Func(args1, ret2));
                     ta.unify_pairs(ret1, args2)?;
                     Ok(ta.pop_type())
-                } else { Err(TypeError::InvalidOperand) }
+                } else { Err(TypeError::ExpectedTuple) }
             }
             (Type::Tuple(lhs), Type::Func(args2, ret2)) => {
-                if args2.len() != lhs.len() { return Err(TypeError::InvalidOperand); }
+                if args2.len() != lhs.len() { return Err(TypeError::ArityMistmatch); }
                 ta.push_type(*ret2);
                 ta.unify_pairs(lhs, args2)?;
                 Ok(ta.pop_type())
             }
-            _ => Err(TypeError::InvalidOperand)
+            (Type::Func(args1, ret1), Type::TVar(v)) => {
+                if let Type::Tuple(ret1) = *ret1 {
+                    let ret2 = Box::new(Type::TVar(ta.fresh_type_var()));
+                    ta.push_type(Type::Func(args1, ret2.clone()));
+                    ta.unify(Type::TVar(v), Type::Func(ret1.clone(), ret2))?;
+                    Ok(ta.pop_type())
+                } else { Err(TypeError::ExpectedTuple) }
+            }
+            (Type::Tuple(ret1), Type::TVar(v)) => {
+                let ret2 = Type::TVar(ta.fresh_type_var());
+                ta.push_type(ret2.clone());
+                ta.unify(Type::TVar(v), Type::Func(ret1.clone(), Box::new(ret2)))?;
+                Ok(ta.pop_type())
+            }
+            _ => Err(TypeError::CannotTypeCheckDollar)
         }
     }
 }

@@ -114,14 +114,14 @@ impl Environ {
             E::Lambda(params, inner_expr) => {
                 Ok(V::Callable(Callable::closure(self.to_owned().var_store, None, params, HashMap::new(), Ok(*inner_expr))))
             }
-            E::Let(bindings, inner_expr) => {
-                let mut innerenv = self.clone();
-                for (v, e) in bindings {
-                    let e_evaled = innerenv.evaluate(e)?;
-                    innerenv.var_store.insert(v, e_evaled);
-                }
-                innerenv.evaluate(*inner_expr)
-            }
+            // E::Let(bindings, inner_expr) => {
+            //     let mut innerenv = self.clone();
+            //     for (v, e) in bindings {
+            //         let e_evaled = innerenv.evaluate(e)?;
+            //         innerenv.var_store.insert(v, e_evaled);
+            //     }
+            //     innerenv.evaluate(*inner_expr)
+            // }
             E::FunApp(f, args) => {
                 let mut args_evaled: Vec<Arg> = Vec::new();
                 for arg in args {

@@ -22,7 +22,7 @@ pub enum AstExpr {
     FunApp(Box<AstExpr>, Vec<AstArg>),
     FunKwApp(Box<AstExpr>, HashMap<String, AstExpr>),
     Macro(String),
-    Let(Vec<(String, AstExpr)>, Box<AstExpr>),
+    //Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
     Tuple(Vec<AstExpr>),
@@ -56,7 +56,7 @@ impl AstExpr {
     pub fn fun_app    (f: AstExpr, args: Vec<AstArg>)              -> AstExpr { AstExpr::FunApp(Box::new(f), args) }
     pub fn fun_kw_app (f: AstExpr, args: HashMap<String, AstExpr>) -> AstExpr { AstExpr::FunKwApp(Box::new(f), args) }
     pub fn macro_expr (s: String)                                  -> AstExpr { AstExpr::Macro(s) }
-    pub fn let_expr   (v: Vec<(String, AstExpr)>, e: AstExpr)      -> AstExpr { AstExpr::Let(v, Box::new(e)) }
+    //pub fn let_expr   (v: Vec<(String, AstExpr)>, e: AstExpr)      -> AstExpr { AstExpr::Let(v, Box::new(e)) }
     pub fn matrix     (r: usize, c: usize, v: Vec<AstExpr>)        -> AstExpr { AstExpr::Matrix(r, c, v) }
     pub fn list       (v: Vec<AstExpr>)                            -> AstExpr { AstExpr::List(v) }
     pub fn tuple      (v: Vec<AstExpr>)                            -> AstExpr { AstExpr::Tuple(v) }

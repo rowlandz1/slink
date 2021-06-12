@@ -142,31 +142,30 @@ impl TAssums {
         }
     }
 
-    /// Renames type variables to be more visually appealing.
-    pub fn refresh_type_vars(&mut self, typ: &mut Type) {
-        self.refresh_helper(typ, &mut HashMap::new());
+    /// Replaces all type variables with symbols unused in the current TAssums context.
+    pub fn refresh_type_vars(&mut self, typ: Type) -> Type {
+        self.refresh_helper(typ, &mut HashMap::new())
     }
 
-    fn refresh_helper(&mut self, typ: &mut Type, h: &mut HashMap<String, String>) {
+    fn refresh_helper(&mut self, typ: Type, h: &mut HashMap<String, String>) -> Type {
         match typ {
             Type::TVar(v) => {
-                if let Some(r) = h.get(v) {
-                    *v = r.clone();
+                if let Some(r) = h.get(&v) {
+                    Type::TVar(r.clone())
                 } else {
                     let newv = self.fresh_type_var();
-                    h.insert((*v).clone(), newv.clone());
-                    *v = newv;
+                    h.insert(v, newv.clone());
+                    Type::TVar(newv)
                 }
             }
             Type::Func(argtypes, rettype) => {
-                for arg in argtypes {
-                    self.refresh_helper(arg, h);
-                }
-                self.refresh_helper(rettype, h);
+                let argtypes: Vec<Type> = argtypes.into_iter().map(|arg|{self.refresh_helper(arg, h)}).collect();
+                let rettype = self.refresh_helper(*rettype, h);
+                Type::Func(argtypes, Box::new(rettype))
             }
-            Type::List(a) => self.refresh_helper(&mut **a, h),
-            Type::Tuple(ts) => for t in ts { self.refresh_helper(t, h); }
-            _ => {}
+            Type::List(a) => Type::list(self.refresh_helper(*a, h)),
+            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t|{self.refresh_helper(t, h)}).collect()),
+            typ => typ
         }
     }
 }
@@ -187,7 +186,7 @@ impl ToString for Type {
                 let params: Vec<String> = v.iter().map(Type::to_string).collect();
                 format!("({}) -> {}", params.join(", "), r.to_string())
             }
-            Type::Any => String::from("?"),
+            Type::Any => String::from("_"),
             Type::Unknown => String::from("Unknown"),
         }
     }
@@ -220,9 +219,14 @@ impl Type {
         }
     }
 
+    /// Replaces all type variables with symbols unused in the given TAssums context.
+    pub fn refresh_type_vars(self, ta: &mut TAssums) -> Type {
+        ta.refresh_type_vars(self)
+    }
+
     /// Renames type variables to be more visually appealing.
-    pub fn normalize_type_var_names(&mut self) {
-        TAssums::new().refresh_type_vars(self);
+    pub fn normalize_type_var_names(self) -> Type {
+        TAssums::new().refresh_type_vars(self)
     }
 }
 

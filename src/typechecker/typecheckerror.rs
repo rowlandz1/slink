@@ -8,7 +8,10 @@ use super::Type;
 pub enum TypeError {
     UnknownIdentifier(String),
     UnificationFailed(Type, Type),
-    InvalidOperand,
+    CannotTypeCheckDot,
+    CannotTypeCheckDollar,
+    ArityMistmatch,
+    ExpectedTuple,
     ArgumentListTooLong,
 }
 
@@ -23,8 +26,17 @@ impl ToString for TypeError {
             TypeError::UnificationFailed(t1, t2) => {
                 format!("TypeError: cannot unify types {} and {}", t1.to_string(), t2.to_string())
             }
-            TypeError::InvalidOperand => {
-                format!("TypeError: invalid operand")
+            TypeError::CannotTypeCheckDot => {
+                format!("TypeError: cannot determine the type of dot expression")
+            }
+            TypeError::CannotTypeCheckDollar => {
+                format!("TypeError: cannot determine the type of dollar expression")
+            }
+            TypeError::ArityMistmatch => {
+                format!("TypeError: arity mismatch")
+            }
+            TypeError::ExpectedTuple => {
+                format!("TypeError: expected tuple")
             }
             TypeError::ArgumentListTooLong => {
                 format!("TypeError: argument list is too long")

@@ -147,20 +147,20 @@ pub fn get_ast_expr(expr: Pair<Rule>) -> E {
             let inner_expr = get_ast_expr(inner_rules.next().unwrap());
             E::lambda(param_vec, inner_expr)
         }
-        Rule::let_expr => {
-            let mut inner_rules = expr.into_inner();
-            let mut bindings: Vec<(String, E)> = vec![];
-            let mut inner1 = inner_rules.next().unwrap().into_inner();
-            loop {
-                if let Some(id) = inner1.next() {
-                    let id = id.as_str().to_string();
-                    let boundexpr = get_ast_expr(inner1.next().unwrap());
-                    bindings.push((id, boundexpr));
-                } else { break; }
-            }
-            let inner_expr = get_ast_expr(inner_rules.next().unwrap());
-            E::let_expr(bindings, inner_expr)
-        }
+        // Rule::let_expr => {
+        //     let mut inner_rules = expr.into_inner();
+        //     let mut bindings: Vec<(String, E)> = vec![];
+        //     let mut inner1 = inner_rules.next().unwrap().into_inner();
+        //     loop {
+        //         if let Some(id) = inner1.next() {
+        //             let id = id.as_str().to_string();
+        //             let boundexpr = get_ast_expr(inner1.next().unwrap());
+        //             bindings.push((id, boundexpr));
+        //         } else { break; }
+        //     }
+        //     let inner_expr = get_ast_expr(inner_rules.next().unwrap());
+        //     E::let_expr(bindings, inner_expr)
+        // }
         Rule::tuple => E::tuple(expr.into_inner().map(|x| get_ast_expr(x)).collect()),
         Rule::bool => E::bool(expr.as_str().eq("true")),
         Rule::string => {

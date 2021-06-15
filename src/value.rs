@@ -23,12 +23,8 @@ pub enum SciVal {
     List(Vec<SciVal>),
     Tuple(Vec<SciVal>),
     Str(String),
-    Callable(Callable)
-}
-
-pub enum Arg {
-    Question,
-    Val(Box<SciVal>),
+    Callable(Callable),
+    Any,
 }
 
 #[derive(Debug, Clone)]
@@ -39,7 +35,7 @@ pub enum Slice<F, S> {
 
 impl SciVal {
     // Function application. Defers to Callable::fun_app
-    pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
+    pub fn fun_app(self, args: Vec<V>) -> EvalResult<SciVal> {
         if let V::Callable(f) = self {
             f.fun_app(args)
         } else { Err(EvalError::TypeMismatch) }
@@ -57,7 +53,7 @@ impl SciVal {
     pub fn fun_comp(self, other: SciVal) -> EvalResult<SciVal> {
         match (self, other) {
             (V::Callable(f1), V::Callable(f2)) => Ok(V::Callable(f1.fun_comp(f2)?)),
-            (v1, V::Callable(f2)) => f2.fun_app(vec![Arg::Val(Box::new(v1))]),
+            (v1, V::Callable(f2)) => f2.fun_app(vec![v1]),
             _ => Err(EvalError::TypeMismatch)
         }
     }
@@ -67,10 +63,7 @@ impl SciVal {
     pub fn fun_comp_unpack(self, other: SciVal) -> EvalResult<SciVal> {
         match (self, other) {
             (V::Callable(f1), V::Callable(f2)) => Ok(V::Callable(f1.fun_comp_unpack(f2)?)),
-            (V::Tuple(args), V::Callable(f2)) => {
-                let args: Vec<Arg> = args.into_iter().map(|arg|{Arg::Val(Box::new(arg))}).collect();
-                f2.fun_app(args)
-            },
+            (V::Tuple(args), V::Callable(f2)) => f2.fun_app(args),
             _ => Err(EvalError::TypeMismatch)
         }
     }

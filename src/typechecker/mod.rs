@@ -7,7 +7,7 @@ pub mod typecheckerror;
 mod types;
 
 use std::collections::HashMap;
-use crate::ast::{AstArg, AstExpr as E, AstStmt};
+use crate::ast::{AstExpr as E, AstStmt};
 use crate::builtins::get_builtin_type;
 use typecheckerror::{TypeCheckResult, TypeError};
 use types::TAssums;
@@ -15,9 +15,9 @@ use types::TAssums;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Num,
-    Matrix,
+    Mat,
     Bool,
-    String,
+    Str,
     List(Box<Type>),
     Tuple(Vec<Type>),
     TVar(String),
@@ -63,21 +63,22 @@ impl TypeEnv {
     /// refinement happens
     fn type_check_helper(&self, expr: &E, ta: &mut TAssums) -> TypeCheckResult<Type> {
         match expr {
-            E::Lambda(params, body) => {
-                ta.push_new_frame(&params);
+            E::Lambda(params, body, paramtypes, rettype) => {
+                let paramtypes = paramtypes.iter().map(|t| match t {
+                    Type::Any => Type::TVar(ta.fresh_type_var()),
+                    Type::TVar(_) => panic!("Shouldn't be a type var"),
+                    t => t.clone(),
+                }).collect::<Vec<Type>>();
+                ta.push_new_frame(params.clone(), paramtypes);
                 let bodytype = self.type_check_helper(body, ta)?;
+                let bodytype = ta.unify(rettype.clone(), bodytype)?;
                 Ok(Type::Func(ta.pop_frame(), Box::new(bodytype)))
             }
             E::FunApp(f, args) => {
                 // type check each of the argument expressions
                 for arg in args.iter() {
-                    match arg {
-                        AstArg::Question => ta.push_type(Type::Any),
-                        AstArg::Expr(e) => {
-                            let typ = self.type_check_helper(e, ta)?;
-                            ta.push_type(typ);
-                        }
-                    }
+                    let typ = self.type_check_helper(arg, ta)?;
+                    ta.push_type(typ);
                 }
 
                 // type check the function expression
@@ -183,14 +184,15 @@ impl TypeEnv {
                     let t = self.type_check_helper(x, ta)?;
                     ta.unify(Type::Num, t)?;
                 }
-                Ok(Type::Matrix)
+                Ok(Type::Mat)
             },
             E::Bool(_) => Ok(Type::Bool),
-            E::Str(_) => Ok(Type::String),
+            E::Str(_) => Ok(Type::Str),
             E::Int(_) => Ok(Type::Num),
             E::Num(_) => Ok(Type::Num),
             E::IntImag(_) => Ok(Type::Num),
             E::FloatImag(_) => Ok(Type::Num),
+            E::Id(x) if x.eq("_") => Ok(Type::Any),
             E::Id(x) => {
                 if let Some(t) = ta.get(x) { Ok(t) }
                 else if let Some(t) = self.var_types.get(x) { Ok(t.clone().refresh_type_vars(ta)) }

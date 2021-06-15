@@ -8,7 +8,7 @@ use crate::ast::AstExpr;
 use crate::error::{EvalError, EvalResult};
 use crate::exec::Environ;
 use crate::builtins::{eval_builtin_function, eval_macro};
-use crate::value::{Arg, Slice, SciVal};
+use crate::value::{Slice, SciVal};
 use Callable::*;
 use NextCall::*;
 
@@ -37,7 +37,7 @@ pub enum NextCall {
 impl Callable {
     pub fn closure(env: HashMap<String, SciVal>, name: Option<String>, params: Vec<String>,
                    app: HashMap<String, SciVal>, expr: Result<AstExpr, String>) -> Callable {
-        Closure{env, name, params, app, expr: expr.map(|t|{Box::new(t)}), next: NoNext}
+        Closure{env, name, params, app, expr: expr.map(Box::new), next: NoNext}
     }
 
     pub fn mk_macro(name: String) -> Callable { Macro(name, NoNext) }
@@ -45,7 +45,7 @@ impl Callable {
     pub fn mk_matrix_slice(slice1: Slice<i32, Option<i32>>, slice2: Slice<i32, Option<i32>>) -> Callable { MatrixSlice(slice1, slice2, NoNext) }
 
     /// Function application with a normal argument list
-    pub fn fun_app(self, args: Vec<Arg>) -> EvalResult<SciVal> {
+    pub fn fun_app(self, args: Vec<SciVal>) -> EvalResult<SciVal> {
         if let Closure{mut env, name, mut params, mut app, expr, next} = self {
             if params.len() < args.len() {
                 return Err(EvalError::ArityMismatch);
@@ -53,8 +53,8 @@ impl Callable {
             let appliedparams = params.split_off(params.len() - args.len());
             for (param, arg) in appliedparams.into_iter().zip(args) {
                 match arg {
-                    Arg::Question => params.push(param),
-                    Arg::Val(arg) => { app.insert(param, *arg); }
+                    SciVal::Any => params.push(param),
+                    arg => { app.insert(param, arg); }
                 }
             }
             if params.len() == 0 {
@@ -73,11 +73,9 @@ impl Callable {
                 };
                 match next {
                     NoNext => Ok(result),
-                    Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                    NextUnpack(next) => if let SciVal::Tuple(values) = result {
-                        let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
-                        next.fun_app(values)
-                    } else { Err(EvalError::NothingToUnpack) }
+                    Next(next) => next.fun_app(vec![result]),
+                    NextUnpack(next) => if let SciVal::Tuple(values) = result { next.fun_app(values) }
+                                        else { Err(EvalError::NothingToUnpack) }
                 }
             } else { Ok(SciVal::Callable(Closure{env, name, params, app, expr, next})) }
         }
@@ -85,50 +83,38 @@ impl Callable {
             let mut newargs: Vec<SciVal> = Vec::new();
             for arg in args.into_iter() {
                 match arg {
-                    Arg::Question => { return Err(EvalError::QuestionMarkMacroArg); }
-                    Arg::Val(v) => { newargs.push(*v); }
+                    SciVal::Any => return Err(EvalError::QuestionMarkMacroArg),
+                    arg => newargs.push(arg),
                 }
             }
             let result = eval_macro(name, newargs)?;
             match next {
                 NoNext => Ok(result),
-                Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                NextUnpack(next) => if let SciVal::Tuple(values) = result {
-                    let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
-                    next.fun_app(values)
-                } else { Err(EvalError::NothingToUnpack) }
+                Next(next) => next.fun_app(vec![result]),
+                NextUnpack(next) => if let SciVal::Tuple(values) = result { next.fun_app(values) }
+                                        else { Err(EvalError::NothingToUnpack) }
             }
         }
         else if let ListSlice(slice, next) = self {
             if args.len() != 1 { panic!("Error, ListSlice was applied to wrong number of arguments"); }
-            let v = match args.into_iter().next().unwrap() {
-                Arg::Question => panic!("Error, ListSlice cannot accept question mark arguments"),
-                Arg::Val(v) => v,
-            };
+            let v = args.into_iter().next().unwrap();
             let result = v.list_slice(slice)?;
             match next {
                 NoNext => Ok(result),
-                Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                NextUnpack(next) => if let SciVal::Tuple(values) = result {
-                    let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
-                    next.fun_app(values)
-                } else { Err(EvalError::NothingToUnpack) }
+                Next(next) => next.fun_app(vec![result]),
+                NextUnpack(next) => if let SciVal::Tuple(values) = result { next.fun_app(values) }
+                                        else { Err(EvalError::NothingToUnpack) }
             }
         }
         else if let MatrixSlice(slice1, slice2, next) = self {
             if args.len() != 1 { panic!("Error, MatrixSlice was applied to wrong number of arguments"); }
-            let v = match args.into_iter().next().unwrap() {
-                Arg::Question => panic!("Error, MatrixSlice cannot accept question mark arguments"),
-                Arg::Val(v) => v,
-            };
+            let v = args.into_iter().next().unwrap();
             let result = v.matrix_slice(slice1, slice2)?;
             match next {
                 NoNext => Ok(result),
-                Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                NextUnpack(next) => if let SciVal::Tuple(values) = result {
-                    let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
-                    next.fun_app(values)
-                } else { Err(EvalError::NothingToUnpack) }
+                Next(next) => next.fun_app(vec![result]),
+                NextUnpack(next) => if let SciVal::Tuple(values) = result { next.fun_app(values) }
+                                        else { Err(EvalError::NothingToUnpack) }
             }
         }
         else { Err(EvalError::TypeMismatch) }
@@ -164,11 +150,9 @@ impl Callable {
                  };
                  match next {
                     NoNext => Ok(result),
-                    Next(next) => next.fun_app(vec![Arg::Val(Box::new(result))]),
-                    NextUnpack(next) => if let SciVal::Tuple(values) = result {
-                        let values: Vec<Arg> = values.into_iter().map(|v| { Arg::Val(Box::new(v)) }).collect();
-                        next.fun_app(values)
-                    } else { Err(EvalError::NothingToUnpack) }
+                    Next(next) => next.fun_app(vec![result]),
+                    NextUnpack(next) => if let SciVal::Tuple(values) = result { next.fun_app(values) }
+                                        else { Err(EvalError::NothingToUnpack) }
                 }
              } else {
                  Ok(SciVal::Callable(Closure{env, name, params, app, expr, next}))

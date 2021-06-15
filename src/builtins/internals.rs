@@ -11,7 +11,7 @@ use crate::callable::Callable;
 use crate::error::{EvalError, EvalResult};
 use crate::matrix::matrix_det;
 use crate::number::Number;
-use crate::value::{Arg, SciVal as V};
+use crate::value::{SciVal as V};
 use Number::{Float, Int};
 
 pub fn get_builtin_function(name: &String) -> Option<V> {
@@ -99,7 +99,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             let p = args.remove("p").unwrap();
             let mut filteredv: Vec<V> = Vec::new();
             for x in v {
-                let sat = p.clone().fun_app(vec![Arg::Val(Box::new(x.clone()))])?;
+                let sat = p.clone().fun_app(vec![x.clone()])?;
                 if let V::Bool(b) = sat {
                     if b { filteredv.push(x); }
                 } else { return Err(EvalError::TypeMismatch); }
@@ -127,7 +127,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             let f = args.remove("f").unwrap();
             let mut mappedv: Vec<V> = Vec::new();
             for x in v {
-                let x = f.clone().fun_app(vec![Arg::Val(Box::new(x))])?;
+                let x = f.clone().fun_app(vec![x])?;
                 mappedv.push(x);
             }
             Ok(V::List(mappedv))
@@ -146,7 +146,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             }
             let mut res: Vec<V> = Vec::new();
             for (l, r) in left.into_iter().zip(right) {
-                res.push(f.clone().fun_app(vec![Arg::Val(Box::new(l)), Arg::Val(Box::new(r))])?);
+                res.push(f.clone().fun_app(vec![l, r])?);
             }
             Ok(V::List(res))
         } else { Err(EvalError::TypeMismatch) }
@@ -220,7 +220,7 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             let mut v = args.remove("v").unwrap();
             let f = args.remove("f").unwrap();
             for item in l {
-                let arglist = vec![Arg::Val(Box::new(v)), Arg::Val(Box::new(item))];
+                let arglist = vec![v, item];
                 v = f.clone().fun_app(arglist)?;
             }
             Ok(v)

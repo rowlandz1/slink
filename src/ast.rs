@@ -5,6 +5,7 @@
  */
 
 use std::collections::HashMap;
+use crate::typechecker::Type;
 
 #[derive(Debug, Clone)]
 pub enum AstStmt {
@@ -18,11 +19,10 @@ pub enum AstExpr {
     Unop(String, Box<AstExpr>),
     ListIdx(Box<AstExpr>, AstSlice),
     MatrixIdx(Box<AstExpr>, AstSlice, AstSlice),
-    Lambda(Vec<String>, Box<AstExpr>),
-    FunApp(Box<AstExpr>, Vec<AstArg>),
+    Lambda(Vec<String>, Box<AstExpr>, Vec<Type>, Type),
+    FunApp(Box<AstExpr>, Vec<AstExpr>),
     FunKwApp(Box<AstExpr>, HashMap<String, AstExpr>),
     Macro(String),
-    //Let(Vec<(String, AstExpr)>, Box<AstExpr>),
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
     Tuple(Vec<AstExpr>),
@@ -36,12 +36,6 @@ pub enum AstExpr {
 }
 
 #[derive(Debug, Clone)]
-pub enum AstArg {
-    Question,
-    Expr(Box<AstExpr>),
-}
-
-#[derive(Debug, Clone)]
 pub enum AstSlice {
     Single(Box<AstExpr>),
     Range(Option<Box<AstExpr>>, Option<Box<AstExpr>>),
@@ -52,11 +46,10 @@ impl AstExpr {
     pub fn unop       (op: String, e: AstExpr)                     -> AstExpr { AstExpr::Unop(op, Box::new(e)) }
     pub fn list_idx   (e: AstExpr, s: AstSlice)                    -> AstExpr { AstExpr::ListIdx(Box::new(e), s) }
     pub fn matrix_idx (e: AstExpr, s1: AstSlice, s2: AstSlice)     -> AstExpr { AstExpr::MatrixIdx(Box::new(e), s1, s2) }
-    pub fn lambda     (args: Vec<String>, e: AstExpr)              -> AstExpr { AstExpr::Lambda(args, Box::new(e)) }
-    pub fn fun_app    (f: AstExpr, args: Vec<AstArg>)              -> AstExpr { AstExpr::FunApp(Box::new(f), args) }
+//    pub fn lambda     (args: Vec<String>, e: AstExpr)              -> AstExpr { AstExpr::Lambda(args, Box::new(e), vec![], Type::Any) }
+    pub fn fun_app    (f: AstExpr, args: Vec<AstExpr>)             -> AstExpr { AstExpr::FunApp(Box::new(f), args) }
     pub fn fun_kw_app (f: AstExpr, args: HashMap<String, AstExpr>) -> AstExpr { AstExpr::FunKwApp(Box::new(f), args) }
     pub fn macro_expr (s: String)                                  -> AstExpr { AstExpr::Macro(s) }
-    //pub fn let_expr   (v: Vec<(String, AstExpr)>, e: AstExpr)      -> AstExpr { AstExpr::Let(v, Box::new(e)) }
     pub fn matrix     (r: usize, c: usize, v: Vec<AstExpr>)        -> AstExpr { AstExpr::Matrix(r, c, v) }
     pub fn list       (v: Vec<AstExpr>)                            -> AstExpr { AstExpr::List(v) }
     pub fn tuple      (v: Vec<AstExpr>)                            -> AstExpr { AstExpr::Tuple(v) }

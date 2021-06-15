@@ -39,6 +39,7 @@ impl ToString for SciVal {
                 format!("'{}'", s.clone())
             }
             SciVal::Callable(f) => f.to_string(),
+            SciVal::Any => String::from("_")
         }
     }
 }
@@ -49,9 +50,9 @@ impl ToString for Callable {
             Callable::Closure{params, app, ..} => {
                 let mut appstring = String::new();
                 for (key, val) in app {
-                    appstring = format!("{} {}={}", appstring, key, val.to_string());
+                    appstring = format!("{}, {}={}", appstring, key, val.to_string());
                 }
-                format!("lam {}{} -> *", params.join(" "), appstring)
+                format!("lam ({}{}) => *", params.join(", "), appstring)
             }
             Callable::Macro(name, ..) => {
                 format!("<macro: {}>", name)

@@ -4,12 +4,12 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::{AstExpr as E, AstStmt, AstArg, AstSlice};
+use crate::ast::{AstExpr as E, AstStmt, AstSlice};
 use crate::callable::Callable;
 use crate::error::{EvalError, EvalResult};
 use crate::builtins::{get_builtin, get_macro};
 use crate::number::Number;
-use crate::value::{Arg, SciVal as V, Slice};
+use crate::value::{SciVal as V, Slice};
 use Callable::*;
 use Number::*;
 
@@ -92,44 +92,19 @@ impl Environ {
                 self.evaluate(*e)?.matrix_slice(rslice, cslice)
             }
             E::Matrix(r, c, v) => {
-                let mut vret: Vec<Number> = vec![];
-                for subexpr in v {
-                    if let V::Number(n) = self.evaluate(subexpr)? {
-                        vret.push(n);
-                    } else { return Err(EvalError::TypeMismatch); }
-                }
-                Ok(V::Matrix(r, c, vret))
+                let v = traverse(v, |e| { if let V::Number(n) = self.evaluate(e)? { Ok(n) }
+                                          else { Err(EvalError::TypeMismatch) }
+                })?;
+                Ok(V::Matrix(r, c, v))
             }
-            E::List(v) => {
-                let mut newv: Vec<V> = Vec::new();
-                for x in v { newv.push(self.evaluate(x)?); }
-                Ok(V::List(newv))
-            }
-            E::Tuple(v) => {
-                let mut newv: Vec<V> = Vec::new();
-                for x in v { newv.push(self.evaluate(x)?); }
-                Ok(V::Tuple(newv))
-            }
+            E::List(v) => Ok(V::List(traverse(v, |x| self.evaluate(x))?)),
+            E::Tuple(v) => Ok(V::Tuple(traverse(v, |x| self.evaluate(x))?)),
             E::Str(s) => Ok(V::Str(s)),
-            E::Lambda(params, inner_expr) => {
+            E::Lambda(params, inner_expr, ..) => {
                 Ok(V::Callable(Callable::closure(self.to_owned().var_store, None, params, HashMap::new(), Ok(*inner_expr))))
             }
-            // E::Let(bindings, inner_expr) => {
-            //     let mut innerenv = self.clone();
-            //     for (v, e) in bindings {
-            //         let e_evaled = innerenv.evaluate(e)?;
-            //         innerenv.var_store.insert(v, e_evaled);
-            //     }
-            //     innerenv.evaluate(*inner_expr)
-            // }
             E::FunApp(f, args) => {
-                let mut args_evaled: Vec<Arg> = Vec::new();
-                for arg in args {
-                    args_evaled.push(match arg {
-                        AstArg::Question => Arg::Question,
-                        AstArg::Expr(e) => Arg::Val(Box::new(self.evaluate(*e)?))
-                    })
-                }
+                let args_evaled = traverse(args, |arg| self.evaluate(arg))?;
                 let f = self.evaluate(*f)?;
                 f.fun_app(args_evaled)
             }
@@ -147,6 +122,7 @@ impl Environ {
             E::IntImag(n) => Ok(V::Number(IntCmplx(0, n))),
             E::FloatImag(n) => Ok(V::Number(FloatCmplx(0f64, n))),
             E::Macro(name) => get_macro(&name).ok_or(EvalError::UndefinedIdentifier(name)),
+            E::Id(x) if x.eq("_") => Ok(V::Any),
             E::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {
                     Ok(v.clone())
@@ -217,4 +193,12 @@ impl Slice<i32, Option<i32>> {
             }
         }
     }
+}
+
+/// Utility function that maps a fallible function over a vector.
+fn traverse<A, F, E, B>(v: Vec<A>, mut f: F) -> Result<Vec<B>, E>
+where F: FnMut(A) -> Result<B, E> {
+    let mut retv: Vec<B> = Vec::with_capacity(v.len());
+    for a in v { retv.push(f(a)?); }
+    Ok(retv)
 }

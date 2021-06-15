@@ -25,12 +25,12 @@ impl TAssums {
 
     /// Introduces fresh type variables for each id and adds them to
     /// a new local type-assumption frame.
-    pub fn push_new_frame(&mut self, ids: &[String]) {
+    pub fn push_new_frame(&mut self, ids: Vec<String>, types: Vec<Type>) {
         let mut hm: HashMap<String, (usize, Type)> = HashMap::new();
-        for i in 0..ids.len() {
-            let new_assumption = Type::TVar(int2typevar(self.i));
-            self.i += 1;
-            hm.insert(ids[i].clone(), (i, new_assumption));
+        let mut i: usize = 0;
+        for (id, typ) in ids.into_iter().zip(types.into_iter()) {
+            hm.insert(id, (i, typ));
+            i += 1;
         }
         self.id_frames.push(hm);
     }
@@ -174,17 +174,17 @@ impl ToString for Type {
     fn to_string(&self) -> String {
         match self {
             Type::Num => String::from("Num"),
-            Type::Matrix => String::from("Matrix"),
+            Type::Mat => String::from("Mat"),
             Type::Bool => String::from("Bool"),
-            Type::String => String::from("String"),
-            Type::List(a) => format!("[{}]", a.to_string()),
+            Type::Str => String::from("Str"),
+            Type::List(a) => format!("List[{}]", a.to_string()),
             Type::TVar(s) => String::from(s),
             Type::Tuple(ts) => {
-                format!("({})", ts.iter().map(Type::to_string).collect::<Vec<String>>().join(", "))
+                format!("Tup[{}]", ts.iter().map(Type::to_string).collect::<Vec<String>>().join(","))
             }
             Type::Func(v, r) => {
                 let params: Vec<String> = v.iter().map(Type::to_string).collect();
-                format!("({}) -> {}", params.join(", "), r.to_string())
+                format!("Fun[{},{}]", params.join(","), r.to_string())
             }
             Type::Any => String::from("_"),
             Type::Unknown => String::from("Unknown"),

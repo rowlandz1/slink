@@ -37,7 +37,6 @@ expr4 = { expr5 ~ (BINOP4 ~ expr5)* }
 expr5 = { expr6 ~ (BINOP5 ~ expr6)* }
 expr6 = { UNOP6* ~ expr7 }
 expr7 = { expr8 ~ (BINOP7 ~ expr8)* }
-//expr8 = { expr9 ~ ("(" ~ fun_args ~ ")")* }
 expr8 = { expr9 ~ paren_operator* }
 expr9 = { expr_base }
 
@@ -45,7 +44,6 @@ expr_base = {
     matrix
   | list
   | lam_expr
-//  | let_expr
   | tuple
   | "(" ~ expr ~ ")"
   | bool
@@ -59,16 +57,17 @@ expr_base = {
   | ID
 }
 
+type_expr = { ID ~ ("[" ~ type_expr ~ ("," ~ type_expr)* ~ "]")? }
+
 matrix = { mat_row+ }
 mat_row = { "{" ~ expr ~ (","? ~ expr)* ~ "}" }
 
 list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
 
-lam_expr = { "lam" ~ param_list ~ ":" ~ expr }
-param_list = { ID+ }
-
-let_expr = { "let" ~ var_bindings ~ "in" ~ expr }
-var_bindings = { ID ~ "=" ~ expr ~ ("," ~ ID ~ "=" ~ expr)* }
+lam_expr = { "lam" ~ "(" ~ param_list ~ ")" ~ ret_type ~ "=>" ~ expr }
+param_list = { param ~ ("," ~ param)* }
+ret_type = { (":" ~ type_expr)? }
+param = { ID ~ (":" ~ type_expr)? }
 
 tuple = {
     "(" ~ ")"

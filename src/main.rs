@@ -56,7 +56,7 @@ fn main() {
                 let stmt: Pair<Rule> = SciLangParser::parse(Rule::stmt, &mut line)
                     .expect("Unsuccessful parse")
                     .next().unwrap();
-                let ast = parser::get_ast_stmt(stmt);
+                let ast = parser::parse_stmt(stmt);
 
                 match &ast {
                     ast::AstStmt::Assign(_, _) => {
@@ -75,7 +75,7 @@ fn main() {
                             Err(err) => { eprintln!("{}", err.to_string()); continue; }
                         };
                         match environ.execute(ast) {
-                            Ok(output) => println!("{} :: {}", output, typ),
+                            Ok(output) => println!("{}: {}", output, typ),
                         //    Ok(output) => println!("{}", output),
                             Err(err) => eprintln!("{}", err.to_string())
                         }
@@ -111,7 +111,7 @@ fn interpret_file(srcfile: &str) {
     let mut inner_rules = prog.next().unwrap().into_inner();
     loop {
         if let Some(stmt) = inner_rules.next() {
-            let ast = parser::get_ast_stmt(stmt);
+            let ast = parser::parse_stmt(stmt);
             //println!("DEBUG: AST: {:?}", ast);
             match environ.execute(ast) {
                 Ok(output) => println!("{}", output),

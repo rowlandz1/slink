@@ -170,42 +170,30 @@ impl TAssums {
     }
 }
 
-impl ToString for Type {
-    fn to_string(&self) -> String {
-        match self {
-            Type::Num => String::from("Num"),
-            Type::Mat => String::from("Mat"),
-            Type::Bool => String::from("Bool"),
-            Type::Str => String::from("Str"),
-            Type::List(a) => format!("List[{}]", a.to_string()),
-            Type::TVar(s) => String::from(s),
-            Type::Tuple(ts) => {
-                format!("Tup[{}]", ts.iter().map(Type::to_string).collect::<Vec<String>>().join(","))
-            }
-            Type::Func(v, r) => {
-                let params: Vec<String> = v.iter().map(Type::to_string).collect();
-                format!("Fun[{},{}]", params.join(","), r.to_string())
-            }
-            Type::Any => String::from("_"),
-            Type::Unknown => String::from("Unknown"),
-        }
-    }
-}
-
 impl Type {
     pub fn replace_type_var(&mut self, tvar: &String, with: &Type) {
         match self {
             Type::TVar(v) => if v == tvar { *self = with.clone(); },
             Type::List(a) => a.replace_type_var(tvar, with),
-            Type::Tuple(ts) => for t in ts { t.replace_type_var(tvar, with); },
+            Type::Tuple(ts) => ts.iter_mut().map(|t| t.replace_type_var(tvar, with)).for_each(drop),
             Type::Func(args, ret) => {
-                for arg in args {
-                    arg.replace_type_var(tvar, with);
-                }
-                //args.iter_mut().map(|arg| arg.replace_type_var(tvar, with));
+                args.iter_mut().map(|t| t.replace_type_var(tvar, with)).for_each(drop);
                 ret.replace_type_var(tvar, with);
             }
             _ => {}
+        }
+    }
+
+    pub fn replace_type_vars(self, replacements: &HashMap<String, Type>) -> Type {
+        match self {
+            Type::TVar(v) => if let Some(t) = replacements.get(&v) { t.clone() } else { Type::TVar(v) }
+            Type::List(t) => Type::list(t.replace_type_vars(replacements)),
+            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t| t.replace_type_vars(replacements)).collect()),
+            Type::Func(args, ret) => Type::Func(
+                args.into_iter().map(|t| t.replace_type_vars(replacements)).collect(),
+                Box::new(ret.replace_type_vars(replacements))
+            ),
+            t => t
         }
     }
 

@@ -5,6 +5,7 @@
 
 use super::Type;
 
+#[derive(Debug)]
 pub enum TypeError {
     UnknownIdentifier(String),
     UnificationFailed(Type, Type),

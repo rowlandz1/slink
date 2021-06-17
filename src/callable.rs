@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::ast::AstExpr;
 use crate::error::{EvalError, EvalResult};
 use crate::exec::Environ;
-use crate::builtins::{eval_builtin_function, eval_macro};
+use crate::builtins::eval_builtin_function;
 use crate::value::{Slice, SciVal};
 use Callable::*;
 use NextCall::*;
@@ -22,7 +22,6 @@ pub enum Callable {
         expr: Result<Box<AstExpr>, String>,     // inner expression (or string for internal functions)
         next: NextCall,                         // for function composition
     },
-    Macro(String, NextCall),                    // name, next
     ListSlice(Slice<i32, Option<i32>>, NextCall),
     MatrixSlice(Slice<i32, Option<i32>>, Slice<i32, Option<i32>>, NextCall),
 }
@@ -40,7 +39,6 @@ impl Callable {
         Closure{env, name, params, app, expr: expr.map(Box::new), next: NoNext}
     }
 
-    pub fn mk_macro(name: String) -> Callable { Macro(name, NoNext) }
     pub fn mk_list_slice(slice: Slice<i32, Option<i32>>) -> Callable { ListSlice(slice, NoNext) }
     pub fn mk_matrix_slice(slice1: Slice<i32, Option<i32>>, slice2: Slice<i32, Option<i32>>) -> Callable { MatrixSlice(slice1, slice2, NoNext) }
 
@@ -78,22 +76,6 @@ impl Callable {
                                         else { Err(EvalError::NothingToUnpack) }
                 }
             } else { Ok(SciVal::Callable(Closure{env, name, params, app, expr, next})) }
-        }
-        else if let Macro(name, next) = self {
-            let mut newargs: Vec<SciVal> = Vec::new();
-            for arg in args.into_iter() {
-                match arg {
-                    SciVal::Any => return Err(EvalError::QuestionMarkMacroArg),
-                    arg => newargs.push(arg),
-                }
-            }
-            let result = eval_macro(name, newargs)?;
-            match next {
-                NoNext => Ok(result),
-                Next(next) => next.fun_app(vec![result]),
-                NextUnpack(next) => if let SciVal::Tuple(values) = result { next.fun_app(values) }
-                                        else { Err(EvalError::NothingToUnpack) }
-            }
         }
         else if let ListSlice(slice, next) = self {
             if args.len() != 1 { panic!("Error, ListSlice was applied to wrong number of arguments"); }
@@ -171,13 +153,6 @@ impl Callable {
                 };
                 Ok(Closure{env, name, params, app, expr, next: Next(Box::new(newnext))})
             }
-            Macro(name, next) => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
-                };
-                Ok(Macro(name, Next(Box::new(newnext))))
-            }
             ListSlice(slice, next) => {
                 let newnext = match next {
                     NoNext => other,
@@ -205,13 +180,6 @@ impl Callable {
                     Next(next) | NextUnpack(next) => next.fun_comp(other)?,
                 };
                 Ok(Closure{env, name, params, app, expr, next: NextUnpack(Box::new(newnext))})
-            }
-            Macro(name, next) => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
-                };
-                Ok(Macro(name, NextUnpack(Box::new(newnext))))
             }
             ListSlice(slice, next) => {
                 let newnext = match next {

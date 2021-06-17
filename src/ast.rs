@@ -19,10 +19,10 @@ pub enum AstExpr {
     Unop(String, Box<AstExpr>),
     ListIdx(Box<AstExpr>, AstSlice),
     MatrixIdx(Box<AstExpr>, AstSlice, AstSlice),
-    Lambda(Vec<String>, Box<AstExpr>, Vec<Type>, Type),
+    /// `Lambda(argnames, expr, typeparams, paramtypes, rettype)`
+    Lambda(Vec<String>, Box<AstExpr>, Vec<String>, Vec<Type>, Type),
     FunApp(Box<AstExpr>, Vec<AstExpr>),
     FunKwApp(Box<AstExpr>, HashMap<String, AstExpr>),
-    Macro(String),
     Matrix(usize, usize, Vec<AstExpr>),
     List(Vec<AstExpr>),
     Tuple(Vec<AstExpr>),
@@ -49,7 +49,6 @@ impl AstExpr {
 //    pub fn lambda     (args: Vec<String>, e: AstExpr)              -> AstExpr { AstExpr::Lambda(args, Box::new(e), vec![], Type::Any) }
     pub fn fun_app    (f: AstExpr, args: Vec<AstExpr>)             -> AstExpr { AstExpr::FunApp(Box::new(f), args) }
     pub fn fun_kw_app (f: AstExpr, args: HashMap<String, AstExpr>) -> AstExpr { AstExpr::FunKwApp(Box::new(f), args) }
-    pub fn macro_expr (s: String)                                  -> AstExpr { AstExpr::Macro(s) }
     pub fn matrix     (r: usize, c: usize, v: Vec<AstExpr>)        -> AstExpr { AstExpr::Matrix(r, c, v) }
     pub fn list       (v: Vec<AstExpr>)                            -> AstExpr { AstExpr::List(v) }
     pub fn tuple      (v: Vec<AstExpr>)                            -> AstExpr { AstExpr::Tuple(v) }

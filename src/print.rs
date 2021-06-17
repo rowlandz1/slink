@@ -4,6 +4,7 @@
  */
 
 use crate::callable::Callable;
+use crate::typechecker::Type;
 use crate::value::SciVal;
 
 impl ToString for SciVal {
@@ -54,15 +55,34 @@ impl ToString for Callable {
                 }
                 format!("lam ({}{}) => *", params.join(", "), appstring)
             }
-            Callable::Macro(name, ..) => {
-                format!("<macro: {}>", name)
-            }
             Callable::ListSlice(_, ..) => {
                 format!("<slice>")
             }
             Callable::MatrixSlice(_, _, ..) => {
                 format!("<matrix slice>")
             }
+        }
+    }
+}
+
+impl ToString for Type {
+    fn to_string(&self) -> String {
+        match self {
+            Type::Num => String::from("Num"),
+            Type::Mat => String::from("Mat"),
+            Type::Bool => String::from("Bool"),
+            Type::Str => String::from("Str"),
+            Type::List(a) => format!("List<{}>", a.to_string()),
+            Type::TVar(s) => String::from(s),
+            Type::Tuple(ts) => {
+                format!("({})", ts.iter().map(Type::to_string).collect::<Vec<String>>().join(", "))
+            }
+            Type::Func(v, r) => {
+                let params: Vec<String> = v.iter().map(Type::to_string).collect();
+                format!("({}) -> {}", params.join(", "), r.to_string())
+            }
+            Type::Any => String::from("_"),
+            Type::Unknown => String::from("Unknown"),
         }
     }
 }

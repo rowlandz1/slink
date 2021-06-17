@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::ast::{AstExpr as E, AstStmt, AstSlice};
 use crate::callable::Callable;
 use crate::error::{EvalError, EvalResult};
-use crate::builtins::{get_builtin, get_macro};
+use crate::builtins::get_builtin;
 use crate::number::Number;
 use crate::value::{SciVal as V, Slice};
 use Callable::*;
@@ -121,7 +121,6 @@ impl Environ {
             E::Num(n) => Ok(V::Number(Float(n))),
             E::IntImag(n) => Ok(V::Number(IntCmplx(0, n))),
             E::FloatImag(n) => Ok(V::Number(FloatCmplx(0f64, n))),
-            E::Macro(name) => get_macro(&name).ok_or(EvalError::UndefinedIdentifier(name)),
             E::Id(x) if x.eq("_") => Ok(V::Any),
             E::Id(x) => {
                 if let Some(v) = self.var_store.get(&x) {

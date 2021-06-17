@@ -3,9 +3,8 @@ digit = _{ '0'..'9' }
 rangetoken = _{ ":" }
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-ID        = @{ alpha ~ (alpha | digit)* }
+ID        = @{ alpha ~ (alpha | digit)* | "_" }
 OPID      = @{ "op" ~ ("+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<=" | ">=" | "<" | ">" ) }
-MACROID   = @{ alpha ~ (alpha | digit)* ~ "!" }
 INT       = @{ digit+ }
 FLOAT     = @{ digit+ ~ "." ~ digit+ }
 INTIMAG   = @{ digit+ ~ "i" }
@@ -18,7 +17,6 @@ BINOP4    = @{ "*" | "/" | "%" }
 BINOP5    = @{ "**" }
 UNOP6     = @{ "-" | "!" }
 BINOP7    = @{ "." | "$" }
-QUEST     = @{ "_" }
 
 prog = { stmt* }
 
@@ -26,8 +24,9 @@ stmt = {
     WHITESPACE* ~ stmt_assign
   | WHITESPACE* ~ expr ~ ";"
 }
-
 stmt_assign = { ID ~ "=" ~ expr ~ ";" }
+
+/***** Expressions *****/
 
 expr  = { expr1 ~ (BINOP0 ~ expr1)* }
 expr1 = { expr2 ~ (BINOP1 ~ expr2)* }
@@ -48,30 +47,30 @@ expr_base = {
   | "(" ~ expr ~ ")"
   | bool
   | string
+  | lam_basic
   | FLOATIMAG
   | INTIMAG
   | FLOAT
   | INT
   | OPID
-  | MACROID
   | ID
 }
 
-type_expr = { ID ~ ("[" ~ type_expr ~ ("," ~ type_expr)* ~ "]")? }
-
 matrix = { mat_row+ }
-mat_row = { "{" ~ expr ~ (","? ~ expr)* ~ "}" }
+mat_row = { "{" ~ expr ~ (","? ~ expr)* ~ ","? ~ "}" }
 
 list = { "[" ~ (expr ~ ("," ~ expr)* ~ ","?)? ~ "]" }
 
-lam_expr = { "lam" ~ "(" ~ param_list ~ ")" ~ ret_type ~ "=>" ~ expr }
-param_list = { param ~ ("," ~ param)* }
+lam_expr = { "lam" ~ type_param_list ~ param_list ~ ret_type ~ "=>" ~ expr }
+type_param_list = { ("<" ~ ID ~ ("," ~ ID)* ~ ","? ~ ">")? }
+param_list = { "(" ~ (param ~ ("," ~ param)*)? ~ ","? ~ ")" }
 ret_type = { (":" ~ type_expr)? }
 param = { ID ~ (":" ~ type_expr)? }
 
+lam_basic = { ID ~ "=>" ~ expr }
+
 tuple = {
-    "(" ~ ")"
-  | "(" ~ expr ~ "," ~ ")"
+    "(" ~ expr ~ "," ~ ")"
   | "(" ~ expr ~ "," ~ expr ~ ")"
   | "(" ~ expr ~ ("," ~ expr)+ ~ ","? ~ ")"
 }
@@ -89,9 +88,8 @@ paren_operator = {
   | "[" ~ slice ~ ("," ~ slice)? ~ "]"
 }
 
-arg_list = { (arg ~ ("," ~ arg)*)? }
-arg = { QUEST | expr }
-kwarg_list = { kwarg ~ ("," ~ kwarg)* }
+arg_list = { (expr ~ ("," ~ expr)* ~ ","?)? }
+kwarg_list = { kwarg ~ ("," ~ kwarg)* ~ ","? }
 kwarg = { ID ~ "=" ~ expr }
 
 slice = { slice_ny | slice_nn | slice_yy | slice_yn | expr }
@@ -99,3 +97,16 @@ slice_ny = { rangetoken ~ expr }
 slice_nn = { rangetoken }
 slice_yy = { expr ~ rangetoken ~ expr }
 slice_yn = { expr ~ rangetoken }
+
+/***** Types *****/
+
+type_expr = {
+    function_type
+  | tuple_type
+  | compound_type
+  | atomic_type
+}
+function_type = { "(" ~ (type_expr ~ ("," ~ type_expr)*)? ~ ")" ~ "->" ~ type_expr }
+tuple_type = { "(" ~ type_expr ~ ("," ~ type_expr)+ ~ ")" }
+compound_type = { ID ~ "<" ~ type_expr ~ ("," ~ type_expr)* ~ ">" }
+atomic_type = { ID }

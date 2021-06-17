@@ -15,7 +15,6 @@ pub enum EvalError {
     OutOfRange,
     InvalidSlice,
     DivideByZero,
-    QuestionMarkMacroArg,
     InvalidKeywordArgument,
     NothingToUnpack,
     InResolvedExpr(Box<EvalError>, String),
@@ -55,9 +54,6 @@ impl ToString for EvalError {
             }
             EvalError::DivideByZero => {
                 format!("Error: divide by zero")
-            }
-            EvalError::QuestionMarkMacroArg => {
-                format!("Error: question mark syntax cannot be used when calling a macro")
             }
             EvalError::InvalidKeywordArgument => {
                 format!("Error: invalid keyword argument")

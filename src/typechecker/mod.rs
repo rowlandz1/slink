@@ -63,15 +63,23 @@ impl TypeEnv {
     /// refinement happens
     fn type_check_helper(&self, expr: &E, ta: &mut TAssums) -> TypeCheckResult<Type> {
         match expr {
-            E::Lambda(params, body, paramtypes, rettype) => {
-                let paramtypes = paramtypes.iter().map(|t| match t {
+            E::Lambda(params, body, typeparams, paramtypes, rettype) => {
+                // replace type parameters with fresh type variables
+                let mut hm: HashMap<String, Type> = HashMap::new();
+                typeparams.iter().map(|t| hm.insert(t.clone(), Type::TVar(ta.fresh_type_var()))).for_each(drop);
+                let paramtypes = paramtypes.iter().map(|t| t.clone().replace_type_vars(&hm));
+                let rettype = rettype.clone().replace_type_vars(&hm);
+
+                // replace `Any` types (from underscores) with new type variables
+                let paramtypes = paramtypes.into_iter().map(|t| match t {
                     Type::Any => Type::TVar(ta.fresh_type_var()),
-                    Type::TVar(_) => panic!("Shouldn't be a type var"),
-                    t => t.clone(),
+                    t => t,
                 }).collect::<Vec<Type>>();
+
+                // actually typecheck the expression now
                 ta.push_new_frame(params.clone(), paramtypes);
                 let bodytype = self.type_check_helper(body, ta)?;
-                let bodytype = ta.unify(rettype.clone(), bodytype)?;
+                let bodytype = ta.unify(rettype, bodytype)?;
                 Ok(Type::Func(ta.pop_frame(), Box::new(bodytype)))
             }
             E::FunApp(f, args) => {
@@ -119,7 +127,6 @@ impl TypeEnv {
                 } else { unreachable!() }
             }
             E::FunKwApp(_f, _args) => Ok(Type::Unknown),
-            E::Macro(_) => Ok(Type::Unknown),
             E::ListIdx(_expr, _slice) => Ok(Type::Unknown),
             E::MatrixIdx(_expr, _slice1, _slice2) => Ok(Type::Unknown),
             E::Binop(op, lhs, rhs) => {

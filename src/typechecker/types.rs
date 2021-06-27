@@ -7,183 +7,93 @@ use std::collections::HashMap;
 use super::Type;
 use super::typecheckerror::{TypeError, TypeCheckResult};
 
-/// Utility object for keeping track of type assumptions and generating
-/// fresh type variables
-pub struct TAssums {
-    // A stack of frames. Each frame maps a variable name to a type assumption
-    // and its position in the variable list at the time of being pushed.
-    id_frames: Vec<HashMap<String, (usize, Type)>>,
-    // Types in this stack are manipulated by unification.
-    type_stack: Vec<Type>,
-    i: u32,     // first unused type variable (integer representation)
+/// A mapping from type variables to more specific types
+#[derive(Debug, Clone)]
+pub struct TypeRefinement {
+    bindings: HashMap<String, Type>
 }
 
-impl TAssums {
-    pub fn new() -> TAssums {
-        TAssums{id_frames: Vec::new(), type_stack: Vec::new(), i: 0}
+impl TypeRefinement {
+    pub fn new() -> TypeRefinement {
+        TypeRefinement{bindings: HashMap::new()}
     }
 
-    /// Introduces fresh type variables for each id and adds them to
-    /// a new local type-assumption frame.
-    pub fn push_new_frame(&mut self, ids: Vec<String>, types: Vec<Type>) {
-        let mut hm: HashMap<String, (usize, Type)> = HashMap::new();
-        let mut i: usize = 0;
-        for (id, typ) in ids.into_iter().zip(types.into_iter()) {
-            hm.insert(id, (i, typ));
-            i += 1;
+    /// Lookup a type-variable binding
+    pub fn lookup(&self, v: &String) -> Option<&Type> {
+        self.bindings.get(v)
+    }
+
+    /// Modifies this TypeRefinement by inserting (or replacing) a binding.
+    pub fn bind(mut self, v: String, t: Type) -> TypeRefinement {
+        self.bindings.insert(v, t); self
+    }
+
+    /// Safely combine two type refinements. Returns ConflictingBindings on error.
+    pub fn combine(mut self, then: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+        for (k, v) in then.bindings.into_iter() {
+            match self.bindings.get(&k) {
+                Some(t) => return Err(TypeError::ConflictingBindings(k, t.clone(), v)),
+                None => self.bindings.insert(k, v),
+            };
         }
-        self.id_frames.push(hm);
+        Ok(self)
     }
 
-    /// Pops the top frame from the stack. The type assumptions are returned in the
-    /// same order as the variable list that was passed to push_new_frame.
-    pub fn pop_frame(&mut self) -> Vec<Type> {
-        let frame = self.id_frames.pop().unwrap();
-        let mut ret: Vec<(usize, Type)> = frame.into_iter().map(|(_, p)| p).collect();
-        let mut i = 0;
-        while i < ret.len() {
-            let j = ret[i].0;
-            ret.swap(i, j);
-            if ret[i].0 == i { i += 1; }
-        }
-        ret.into_iter().map(|(_, t)| t).collect()
-    }
-
-    /// Push a type onto the type stack. Types on this stack are manipulated by unification
-    pub fn push_type(&mut self, typ: Type) { self.type_stack.push(typ); }
-    /// Pop a type from the type stack. The stack must be non-empty.
-    pub fn pop_type(&mut self) -> Type { self.type_stack.pop().unwrap() }
-    /// Pop n types at once. Types that were pushed first will be at start of returned vector.
-    pub fn pop_types(&mut self, n: usize) -> Vec<Type> { let at = self.type_stack.len() - n; self.type_stack.split_off(at) }
-
-    /// Lookup the assumed type for the given id.
-    pub fn get(&self, id: &String) -> Option<Type> {
-        for frame in self.id_frames.iter().rev() {
-            if let Some((_, typ)) = frame.get(id) { return Some(typ.clone()); }
-        }
-        None
-    }
-
-    /// Type unification. Returns the intersection of two types.
-    /// A UnificationFailed error is returned if the intersection
-    /// is empty.
-    pub fn unify(&mut self, t1: Type, t2: Type) -> TypeCheckResult<Type> {
-        match (t1, t2) {
-            (Type::Any, t2) |
-            (t2, Type::Any) => Ok(t2),
-            (Type::TVar(v1), Type::TVar(v2)) => {
-                self.replace_type_var(v1, Type::TVar(v2.clone()));
-                Ok(Type::TVar(v2))
-            }
-            (Type::TVar(v), t2) |
-            (t2, Type::TVar(v)) => {
-                if t2.contains_var(&v) {
-                    return Err(TypeError::UnificationFailed(Type::TVar(v), t2));
-                }
-                self.replace_type_var(v, t2.clone());
-                Ok(t2)
-            }
-            (Type::Unknown, _) | (_, Type::Unknown)=> Ok(Type::Unknown),
-            (Type::Func(mut args1, ret1), Type::Func(mut args2, ret2)) => {
-                if args1.len() != args2.len() { return Err(TypeError::ArgumentListTooLong); }
-                args1.push(*ret1);
-                args2.push(*ret2);
-                let mut args3 = self.unify_pairs(args1, args2)?;
-                let ret3 = Box::new(args3.pop().unwrap());
-                Ok(Type::Func(args3, ret3))
-            }
-            (Type::List(a), Type::List(b)) => {
-                let a = self.unify(*a, *b)?;
-                Ok(Type::list(a))
-            }
-            (Type::Tuple(types1), Type::Tuple(types2)) => {
-                if types1.len() != types2.len() { return Err(TypeError::UnificationFailed(Type::Tuple(types1), Type::Tuple(types2))); }
-                Ok(Type::Tuple(self.unify_pairs(types1, types2)?))
-            }
-            (t1, t2) => if t1 == t2 { Ok(t1) }
-                               else { Err(TypeError::UnificationFailed(t1, t2)) }
-        }
-    }
-
-    /// Unify pairs of types. The pairs are specified as parallel vectors (that must have
-    /// the same length).
-    pub fn unify_pairs(&mut self, mut types1: Vec<Type>, mut types2: Vec<Type>) -> TypeCheckResult<Vec<Type>> {
-        if types1.len() != types2.len() { panic!("Error, cannot unify pairs if vectors are not the same size"); }
-        let numpairs = types1.len();
-        let origlen = self.type_stack.len();
-        let base = origlen + numpairs - 1;
-        self.type_stack.append(&mut types1);
-        self.type_stack.append(&mut types2);
-
-        for i in 0..numpairs {
-            let t1 = self.type_stack.get(base - i).unwrap().clone();
-            let t2 = self.type_stack.pop().unwrap();
-            self.unify(t1, t2)?;
-        }
-
-        Ok(self.type_stack.split_off(origlen))
-    }
-
-    /// Returns a fresh type variable.
-    pub fn fresh_type_var(&mut self) -> String {
-        let ret = int2typevar(self.i);
-        self.i += 1;
-        ret
-    }
-
-    fn replace_type_var(&mut self, tvar: String, with: Type) {
-        for hm in self.id_frames.iter_mut() {
-            for (_, t) in hm.values_mut() {
-                t.replace_type_var(&tvar, &with);
-            }
-        }
-        for typ in self.type_stack.iter_mut() {
-            typ.replace_type_var(&tvar, &with);
-        }
-    }
-
-    /// Replaces all type variables with symbols unused in the current TAssums context.
-    pub fn refresh_type_vars(&mut self, typ: Type) -> Type {
-        self.refresh_helper(typ, &mut HashMap::new())
-    }
-
-    fn refresh_helper(&mut self, typ: Type, h: &mut HashMap<String, String>) -> Type {
+    /// Resolves all bound type variables in the given type. Doesn't check for circular bindings.
+    pub fn refine(&self, typ: Type) -> Type {
         match typ {
-            Type::TVar(v) => {
-                if let Some(r) = h.get(&v) {
-                    Type::TVar(r.clone())
-                } else {
-                    let newv = self.fresh_type_var();
-                    h.insert(v, newv.clone());
-                    Type::TVar(newv)
-                }
-            }
-            Type::Func(argtypes, rettype) => {
-                let argtypes: Vec<Type> = argtypes.into_iter().map(|arg|{self.refresh_helper(arg, h)}).collect();
-                let rettype = self.refresh_helper(*rettype, h);
-                Type::Func(argtypes, Box::new(rettype))
-            }
-            Type::List(a) => Type::list(self.refresh_helper(*a, h)),
-            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t|{self.refresh_helper(t, h)}).collect()),
+            Type::List(t) => Type::list(self.refine(*t)),
+            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t| self.refine(t)).collect()),
+            Type::Func(paramtypes, rettype) => Type::Func(
+                paramtypes.into_iter().map(|t| self.refine(t)).collect(),
+                Box::new(self.refine(*rettype))),
+            Type::TVar(v) => if let Some(repl) = self.bindings.get(&v) {
+                self.refine(repl.clone())
+            } else { Type::TVar(v) }
             typ => typ
         }
     }
 }
 
-impl Type {
-    pub fn replace_type_var(&mut self, tvar: &String, with: &Type) {
-        match self {
-            Type::TVar(v) => if v == tvar { *self = with.clone(); },
-            Type::List(a) => a.replace_type_var(tvar, with),
-            Type::Tuple(ts) => ts.iter_mut().map(|t| t.replace_type_var(tvar, with)).for_each(drop),
-            Type::Func(args, ret) => {
-                args.iter_mut().map(|t| t.replace_type_var(tvar, with)).for_each(drop);
-                ret.replace_type_var(tvar, with);
-            }
-            _ => {}
+/// Adds bindings to the type refinement to make the two types equal.
+pub fn unify(t1: &Type, t2: &Type, rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+    match (t1, t2) {
+        (Type::Any, _) |
+        (_, Type::Any) => Ok(rf),
+        (Type::Unknown, _) | (_, Type::Unknown) => Ok(rf),
+        (Type::TVar(v), t) |
+        (t, Type::TVar(v)) => {
+            let x = rf.lookup(v);
+            if let Some(t2) = x {
+                unify(t, &t2.clone(), rf)
+            } else if !rf.refine(t.clone()).contains_var(v) {
+                Ok(rf.bind(v.clone(), t.clone()))
+            } else { Err(TypeError::UnificationFailed(Type::TVar(v.clone()), t2.clone())) }
         }
+        (Type::Func(args1, ret1), Type::Func(args2, ret2)) => {
+            if args1.len() != args2.len() { return Err(TypeError::ArgumentListTooLong); }
+            let rf = unify_pairs(args1, args2, rf)?;
+            unify(ret1, ret2, rf)
+        }
+        (Type::List(a), Type::List(b)) => unify(a, b, rf),
+        (Type::Tuple(types1), Type::Tuple(types2)) => if types1.len() == types2.len() {
+            unify_pairs(types1, types2, rf)
+        } else { Err(TypeError::UnificationFailed(Type::Tuple(types1.clone()), Type::Tuple(types2.clone()))) }
+        (t1, t2) => if t1 == t2 {
+            Ok(rf)
+        } else { Err(TypeError::UnificationFailed(t1.clone(), t2.clone())) }
     }
+}
 
+pub fn unify_pairs(types1: &Vec<Type>, types2: &Vec<Type>, mut rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+    if types1.len() != types2.len() { panic!("Error, cannot unify pairs if vectors are not the same size"); }
+    for (t1, t2) in types1.iter().zip(types2.iter()) {
+        rf = unify(t1, t2, rf)?;
+    }
+    Ok(rf)
+}
+
+impl Type {
     pub fn replace_type_vars(self, replacements: &HashMap<String, Type>) -> Type {
         match self {
             Type::TVar(v) => if let Some(t) = replacements.get(&v) { t.clone() } else { Type::TVar(v) }
@@ -208,19 +118,42 @@ impl Type {
     }
 
     /// Replaces all type variables with symbols unused in the given TAssums context.
-    pub fn refresh_type_vars(self, ta: &mut TAssums) -> Type {
-        ta.refresh_type_vars(self)
+    pub fn refresh_type_vars(self, i: &mut u32) -> Type {
+        self.refresh_helper(i, &mut HashMap::new())
+    }
+
+    fn refresh_helper(self, i: &mut u32, h: &mut HashMap<String, String>) -> Type {
+        match self {
+            Type::TVar(v) => {
+                if let Some(r) = h.get(&v) {
+                    Type::TVar(r.clone())
+                } else {
+                    let newv = fresh_type_var(i);
+                    h.insert(v, newv.clone());
+                    Type::TVar(newv)
+                }
+            }
+            Type::Func(argtypes, rettype) => {
+                let argtypes: Vec<Type> = argtypes.into_iter().map(|arg|{arg.refresh_helper(i, h)}).collect();
+                let rettype = rettype.refresh_helper(i, h);
+                Type::Func(argtypes, Box::new(rettype))
+            }
+            Type::List(a) => Type::list(a.refresh_helper(i, h)),
+            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t|{t.refresh_helper(i, h)}).collect()),
+            typ => typ
+        }
     }
 
     /// Renames type variables to be more visually appealing.
     pub fn normalize_type_var_names(self) -> Type {
-        TAssums::new().refresh_type_vars(self)
+        self.refresh_helper(&mut 0, &mut HashMap::new())
     }
 }
 
-/// Converts a type variable (numeric representation) into its string representation
-fn int2typevar(i: u32) -> String {
-    let num_primes = (i / 26) as usize;
-    let letter = char::from_u32((i % 26) + 0x41).unwrap();
+/// Returns a fresh type variable.
+pub fn fresh_type_var(i: &mut u32) -> String {
+    let num_primes = (*i / 26) as usize;
+    let letter = char::from_u32((*i % 26) + 0x41).unwrap();
+    *i = *i + 1;
     format!("{}{}", letter, "'".repeat(num_primes))
 }

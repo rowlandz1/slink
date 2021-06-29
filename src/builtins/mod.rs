@@ -26,6 +26,11 @@ pub fn get_builtin_type(name: &str) -> Option<Type> {
     builtintypes::get_builtin_type(name)
 }
 
+pub fn get_builtin_type_mult(name: &str) -> Option<Vec<Type>> {
+    let types = builtintypes::get_builtin_type_mult(name);
+    if types.len() == 0 { None } else { Some(types) }
+}
+
 // Applies the arguments to the internal function.
 // NOTE: Arity mismatches need to be checked BEFORE calling this function.
 pub fn eval_builtin_function(name: String, args: HashMap<String, SciVal>) -> EvalResult<SciVal> {

@@ -14,6 +14,7 @@ pub enum TypeError {
     ArityMistmatch,
     ExpectedTuple,
     ArgumentListTooLong,
+    OverloadedType,
     ConflictingBindings(String, Type, Type),
 }
 
@@ -42,6 +43,9 @@ impl ToString for TypeError {
             }
             TypeError::ArgumentListTooLong => {
                 format!("TypeError: argument list is too long")
+            }
+            TypeError::OverloadedType => {
+                format!("TypeError: overloaded type")
             }
             TypeError::ConflictingBindings(v, t1, t2) => {
                 format!("TypeError: conflicting bindings for {}: {} and {}", v, t1.to_string(), t2.to_string())

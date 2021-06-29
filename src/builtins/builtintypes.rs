@@ -46,7 +46,7 @@ pub fn get_builtin_type(name: &str) -> Option<T> {
     })
 }
 
-pub fn _get_builtin_type_mult(name: &str) -> Vec<T> {
+pub fn get_builtin_type_mult(name: &str) -> Vec<T> {
     match name {
         "abs"       => vec![T::func1(T::Num, T::Num)],
         "argmax"    => vec![T::func1(T::list(T::Num), T::Num)],
@@ -81,6 +81,8 @@ pub fn _get_builtin_type_mult(name: &str) -> Vec<T> {
         "op<="      => vec![T::func2(T::Num, T::Num, T::Bool)],
         "op>"       => vec![T::func2(T::Num, T::Num, T::Bool)],
         "op<"       => vec![T::func2(T::Num, T::Num, T::Bool)],
+        "op&&"      => vec![T::func2(T::Bool, T::Bool, T::Bool)],
+        "op||"      => vec![T::func2(T::Bool, T::Bool, T::Bool)],
         "pi"        => vec![T::Num],
         "push"      => vec![T::func2(T::list(T::var("A")), T::var("A"), T::list(T::var("A")))],
         "range"     => vec![T::func2(T::Num, T::Num, T::list(T::Num))],

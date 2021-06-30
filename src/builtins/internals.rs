@@ -45,6 +45,7 @@ pub fn get_builtin_function(name: &String) -> Option<V> {
         "range"     => vec!["n1", "n2"],
         "reduce"    => vec!["l", "v", "f"],
         "reverse"   => vec!["l"],
+        "shape"     => vec!["m"],
         "split"     => vec!["s1", "s2"],
         "sqrt"      => vec!["x"],
         "transpose" => vec!["m"],
@@ -60,24 +61,24 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
     match intfun.as_str() {
         "abs" => args.remove("x").unwrap().abs(),
         "argmax" => if let V::List(v) = args.remove("l").unwrap() {
-            let mut m: V = v[0].clone();
-            let mut i: usize = 0;
-            let mut j: usize = 0;
-            for elem in v {
-                if let V::Bool(true) = elem.gt(&m)? { m = elem; i = j; }
-                j += 1;
-            }
-            Ok(V::Number(Int(i as i32)))
+            let start = match v.get(0) {
+                Some(first) => first,
+                None => return Err(EvalError::EmptyList),
+            };
+            let res = v.iter().try_fold((0, 0, start), |(i, im, max), elem| {
+                if let V::Bool(true) = elem.gt(max)? { Ok((i+1, i, elem)) } else { Ok((i+1, im, max)) }
+            })?;
+            Ok(V::Number(Int(res.1 as i32)))
         } else { Err(EvalError::TypeMismatch) }
         "argmin" => if let V::List(v) = args.remove("l").unwrap() {
-            let mut m: V = v[0].clone();
-            let mut i: usize = 0;
-            let mut j: usize = 0;
-            for elem in v {
-                if let V::Bool(true) = elem.lt(&m)? { m = elem; i = j; }
-                j += 1;
-            }
-            Ok(V::Number(Int(i as i32)))
+            let start = match v.get(0) {
+                Some(first) => first,
+                None => return Err(EvalError::EmptyList),
+            };
+            let res = v.iter().try_fold((0, 0, start), |(i, im, min), elem| {
+                if let V::Bool(true) = elem.lt(min)? { Ok((i+1, i, elem)) } else { Ok((i+1, im, min)) }
+            })?;
+            Ok(V::Number(Int(res.1 as i32)))
         } else { Err(EvalError::TypeMismatch) }
         "conj" => args.remove("c").unwrap().conjugate(),
         "det" => if let V::Matrix(r, c, v) = args.remove("m").unwrap() {
@@ -230,6 +231,9 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             V::Str(s) => Ok(V::Str(s.chars().rev().collect())),
             _ => Err(EvalError::TypeMismatch)
         }
+        "shape" => if let V::Matrix(r, c, _) = args.remove("m").unwrap() {
+            Ok(V::Tuple(vec![V::Number(Int(r as i32)), V::Number(Int(c as i32))]))
+        } else { Err(EvalError::TypeMismatch) }
         "split" => {
             let s1 = if let V::Str(v) = args.remove("s1").unwrap() { v }
                      else { return Err(EvalError::TypeMismatch) };

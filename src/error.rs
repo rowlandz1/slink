@@ -7,6 +7,7 @@
 pub enum EvalError {
     InvalidMatrixShape,
     IncompatibleMatrixShapes,
+    EmptyList,
     NoninvertableMatrix,
     ArityMismatch,
     TypeMismatch,
@@ -30,6 +31,9 @@ impl ToString for EvalError {
             }
             EvalError::IncompatibleMatrixShapes => {
                 format!("Error: incompatible matrix shapes")
+            }
+            EvalError::EmptyList => {
+                format!("Error: cannot handle empty list")
             }
             EvalError::NoninvertableMatrix => {
                 format!("Error: noninvertable matrix")

@@ -8,7 +8,7 @@ mod types;
 
 use std::collections::HashMap;
 use crate::ast::{AstExpr as E, AstStmt};
-use crate::builtins::get_builtin_type_mult;
+use crate::builtins::type_check_builtin;
 use typecheckerror::{TypeCheckResult, TypeError};
 use types::{TypeRefinement, unify, unify_pairs, fresh_type_var};
 
@@ -44,6 +44,16 @@ impl TypeSet {
         }
     }
 
+    pub fn map<F>(self, f: F) -> TypeSet
+    where F: FnMut((Type, TypeRefinement)) -> (Type, TypeRefinement) {
+        TypeSet{bindings: self.bindings.into_iter().map(f).collect::<Vec<(Type, TypeRefinement)>>()}
+    }
+
+    pub fn filter_map<F>(self, f: F) -> TypeSet
+    where F: FnMut((Type, TypeRefinement)) -> Option<(Type, TypeRefinement)> {
+        TypeSet{bindings: self.bindings.into_iter().filter_map(f).collect::<Vec<(Type, TypeRefinement)>>()}
+    }
+
     /// Combines each type refinement in the type set with the given rf
     pub fn combine(self, rf2: TypeRefinement) -> TypeCheckResult<TypeSet> {
         let mut bindings: Vec<(Type, TypeRefinement)> = Vec::with_capacity(self.bindings.len());
@@ -68,6 +78,44 @@ impl TypeSet {
         }
         if bindings.len() == 0 { panic!("Error: no more bindings (2)") }
         Ok(TypeSet{bindings})
+    }
+
+    /// Multi-unification of function application
+    pub fn apply_args(self, argtypes: Vec<Type>, i: &mut u32) -> TypeCheckResult<TypeSet> {
+        // If partial application is happening (including _-arguments), partially-curry
+        // the function type (e.g. (A,B,C) -> D becomes (B,C) -> (A) -> D).
+        // Also, remove the "Any" types from the arg list.
+        let ftypes = self.filter_map(|(ftype, rf)| {
+            if let Type::Func(mut paramtypes, rettype) = ftype {
+                if paramtypes.len() < argtypes.len() { return None; }
+                let mut appliedparams = paramtypes.split_off(paramtypes.len() - argtypes.len());
+
+                let mut i = 0;
+                while i < appliedparams.len() {
+                    if let Type::Any = argtypes[i] {
+                        paramtypes.push(appliedparams.remove(i));
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                Some(if paramtypes.len() > 0 {
+                    (Type::Func(appliedparams, Box::new(Type::Func(paramtypes, rettype))), rf)
+                } else {
+                    (Type::Func(appliedparams, rettype), rf)
+                })
+            } else { Some((ftype, rf)) }
+        });
+
+        // Unify the function type and "(argtypes) -> newtypevar"
+        // and return the return type.
+        let type2 = Type::Func(argtypes, Box::new(Type::TVar(fresh_type_var(i))));
+        let results = ftypes.unify(&type2)?;
+        Ok(results.map(|(t, rf)| {
+            if let Type::Func(_, rettype) = t {
+                (*rettype, rf)
+            } else { unreachable!() }
+        }))
     }
 }
 
@@ -180,40 +228,10 @@ impl TypeEnv {
                 }
 
                 // type check the function expression
-                let (ftype, rf2) = self.type_check_helper(f, i)?.expect_one()?;
-                rf = rf.combine(rf2)?;
+                let ftypes = self.type_check_helper(f, i)?.combine(rf)?;
 
-                // If partial application is happening (including ?-syntax), partially-curry
-                // the function type (e.g. (A,B,C) -> D becomes (B,C) -> (A) -> D).
-                // Also, remove the "Any" types from the arg list.
-                let type1 = if let Type::Func(mut paramtypes, rettype) = ftype {
-                    if paramtypes.len() < argtypes.len() { return Err(TypeError::ArgumentListTooLong); }
-                    let mut appliedparams = paramtypes.split_off(paramtypes.len() - argtypes.len());
-
-                    let mut i = 0;
-                    while i < appliedparams.len() {
-                        if let Type::Any = argtypes[i] {
-                            argtypes.remove(i);
-                            paramtypes.push(appliedparams.remove(i));
-                        } else {
-                            i += 1;
-                        }
-                    }
-
-                    if paramtypes.len() > 0 {
-                        Type::Func(appliedparams, Box::new(Type::Func(paramtypes, rettype)))
-                    } else {
-                        Type::Func(appliedparams, rettype)
-                    }
-                } else { ftype };
-
-                // Unify the function type and "(argtypes) -> newtypevar"
-                // and return the return type.
-                let type2 = Type::Func(argtypes, Box::new(Type::TVar(fresh_type_var(i))));
-                let rf = unify(&type1, &type2, rf)?;
-                if let Type::Func(_, rettype) = rf.refine(type1) {
-                    Ok(TypeSet::single(*rettype, rf))
-                } else { unreachable!() }
+                // continue type checking
+                ftypes.apply_args(argtypes, i)
             }
             E::FunKwApp(_f, _args) => Ok(TypeSet::single(Type::Unknown, TypeRefinement::new())),
             E::ListIdx(_expr, _slice) => Ok(TypeSet::single(Type::Unknown, TypeRefinement::new())),
@@ -222,28 +240,29 @@ impl TypeEnv {
                 let (lhs, mut rf) = self.type_check_helper(lhs, i)?.expect_one()?;
                 let (rhs, rf2) = self.type_check_helper(rhs, i)?.expect_one()?;
                 rf = rf.combine(rf2)?;
-                let mut typ2 = TypeSet{bindings: match op.as_str() {
+                let typ2 = TypeSet{bindings: match op.as_str() {
                     "."  => return self.type_check_dot(lhs, rhs, i),
                     "$"  => return self.type_check_dollar(lhs, rhs, i),
-                    "+"  => get_builtin_type_mult("op+"),
-                    "-"  => get_builtin_type_mult("op-"),
-                    "*"  => get_builtin_type_mult("op*"),
-                    "/"  => get_builtin_type_mult("op/"),
-                    "%"  => get_builtin_type_mult("op%"),
-                    "**" => get_builtin_type_mult("op**"),
-                    "==" => get_builtin_type_mult("op=="),
-                    "!=" => get_builtin_type_mult("op!="),
-                    "<=" => get_builtin_type_mult("op<="),
-                    ">=" => get_builtin_type_mult("op>="),
-                    "<"  => get_builtin_type_mult("op<"),
-                    ">"  => get_builtin_type_mult("op>"),
-                    "&&" => get_builtin_type_mult("op&&"),
-                    "||" => get_builtin_type_mult("op||"),
+                    "+"  => type_check_builtin("op+"),
+                    "-"  => type_check_builtin("op-"),
+                    "*"  => type_check_builtin("op*"),
+                    "/"  => type_check_builtin("op/"),
+                    "%"  => type_check_builtin("op%"),
+                    "**" => type_check_builtin("op**"),
+                    "==" => type_check_builtin("op=="),
+                    "!=" => type_check_builtin("op!="),
+                    "<=" => type_check_builtin("op<="),
+                    ">=" => type_check_builtin("op>="),
+                    "<"  => type_check_builtin("op<"),
+                    ">"  => type_check_builtin("op>"),
+                    "&&" => type_check_builtin("op&&"),
+                    "||" => type_check_builtin("op||"),
                     _ => panic!("Unrecognized binary operator")
                 }.unwrap().into_iter().map(|t| (t, TypeRefinement::new())).collect::<Vec<(Type, TypeRefinement)>>()};
                 //let typ2 = if typ2.len() == 1 { typ2.pop().unwrap() } else { return Err(TypeError::OverloadedType) };
                 let typ1 = Type::func2(lhs, rhs, Type::TVar(fresh_type_var(i)));
-                let (typ2, rf) = typ2.unify(&typ1)?.expect_one()?;
+                let (typ2, rf2) = typ2.unify(&typ1)?.expect_one()?;
+                rf = rf.combine(rf2)?;
                 if let Type::Func(_, rettype) = typ2 {
                     Ok(TypeSet::single(*rettype, rf))
                 } else { unreachable!() }
@@ -300,10 +319,10 @@ impl TypeEnv {
             E::Id(x) if x.eq("_") => Ok(TypeSet::single(Type::Any, TypeRefinement::new())),
             E::Id(x) => {
                 if let Some(t) = self.get(x, i) { Ok(TypeSet::single(t, TypeRefinement::new())) }
-                else if let Some(mut ts) = get_builtin_type_mult(x) {
-                    if ts.len() == 1 {
-                        Ok(TypeSet::single(ts.pop().unwrap().refresh_type_vars(i), TypeRefinement::new()))
-                    } else { Err(TypeError::OverloadedType) }
+                else if let Some(ts) = type_check_builtin(x) {
+                    Ok(TypeSet{bindings: ts.into_iter().map(|t| {
+                        (t.refresh_type_vars(i), TypeRefinement::new())
+                    }).collect::<Vec<(Type, TypeRefinement)>>()})
                 }
                 else { Err(TypeError::UnknownIdentifier(x.clone())) }
             }
@@ -377,9 +396,7 @@ impl TypeEnv {
 
 impl Type {
     pub fn list(t: Type) -> Type { Type::List(Box::new(t)) }
-    pub fn tup2(t1: Type, t2: Type) -> Type { Type::Tuple(vec![t1, t2]) }
     pub fn var(v: &str) -> Type { Type::TVar(String::from(v)) }
     pub fn func1(arg: Type, ret: Type) -> Type { Type::Func(vec![arg], Box::new(ret)) }
     pub fn func2(arg1: Type, arg2: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2], Box::new(ret)) }
-    pub fn func3(arg1: Type, arg2: Type, arg3: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2, arg3], Box::new(ret)) }
 }

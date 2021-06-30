@@ -21,13 +21,9 @@ pub fn get_builtin(name: &String) -> Option<SciVal> {
     internals::get_builtin_function(&name)
 }
 
-/// Returns the type of a builtin construct.
-pub fn get_builtin_type(name: &str) -> Option<Type> {
-    builtintypes::get_builtin_type(name)
-}
-
-pub fn get_builtin_type_mult(name: &str) -> Option<Vec<Type>> {
-    let types = builtintypes::get_builtin_type_mult(name);
+/// Get types of a builtin construct
+pub fn type_check_builtin(name: &str) -> Option<Vec<Type>> {
+    let types = builtintypes::type_check_builtin(name);
     if types.len() == 0 { None } else { Some(types) }
 }
 

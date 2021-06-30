@@ -16,17 +16,13 @@ extern crate pest;
 extern crate pest_derive;
 extern crate rustyline;
 
-use pest::iterators::Pair;
-use pest::Parser;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::env;
-use std::fs;
-use std::io::Read;
 
-#[derive(Parser)]
-#[grammar = "grammar.pest"]
-pub struct SciLangParser;
+// #[derive(Parser)]
+// #[grammar = "grammar.pest"]
+// pub struct SciLangParser;
 
 fn main() {
 
@@ -50,13 +46,10 @@ fn main() {
     // REPL
     loop {
         match rl.readline(">> ") {
-            Ok(mut line) => {
+            Ok(line) => {
                 rl.add_history_entry(line.as_str());
 
-                let stmt: Pair<Rule> = SciLangParser::parse(Rule::stmt, &mut line)
-                    .expect("Unsuccessful parse")
-                    .next().unwrap();
-                let ast = parser::parse_stmt(stmt);
+                let ast = parser::parse_stmt(line);
 
                 match &ast {
                     ast::AstStmt::Assign(_, _) => {
@@ -99,24 +92,25 @@ fn main() {
     //rl.save_history("history.txt").unwrap();
 }
 
-fn interpret_file(srcfile: &str) {
-    let mut environ = exec::Environ::new();
-    let mut srcfile = fs::File::open(srcfile)
-        .expect("Cannot open requested file");
-    let mut contents = String::new();
-    srcfile.read_to_string(&mut contents).unwrap();
-    let mut prog = SciLangParser::parse(Rule::prog, &mut contents)
-        .expect("unsuccessful parse");
+fn interpret_file(_srcfile: &str) {
+    todo!()
+    // let mut environ = exec::Environ::new();
+    // let mut srcfile = fs::File::open(srcfile)
+    //     .expect("Cannot open requested file");
+    // let mut contents = String::new();
+    // srcfile.read_to_string(&mut contents).unwrap();
+    // let mut prog = SciLangParser::parse(Rule::prog, &mut contents)
+    //     .expect("unsuccessful parse");
 
-    let mut inner_rules = prog.next().unwrap().into_inner();
-    loop {
-        if let Some(stmt) = inner_rules.next() {
-            let ast = parser::parse_stmt(stmt);
-            //println!("DEBUG: AST: {:?}", ast);
-            match environ.execute(ast) {
-                Ok(output) => println!("{}", output),
-                Err(err) => { eprintln!("{}", err); break; }
-            }
-        } else { break; }
-    }
+    // let mut inner_rules = prog.next().unwrap().into_inner();
+    // loop {
+    //     if let Some(stmt) = inner_rules.next() {
+    //         let ast = parser::parse_stmt(stmt);
+    //         //println!("DEBUG: AST: {:?}", ast);
+    //         match environ.execute(ast) {
+    //             Ok(output) => println!("{}", output),
+    //             Err(err) => { eprintln!("{}", err); break; }
+    //         }
+    //     } else { break; }
+    // }
 }

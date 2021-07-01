@@ -13,6 +13,7 @@ pub enum TypeError {
     CannotTypeCheckDollar,
     ArityMistmatch,
     ExpectedTuple,
+    ExpectedFunction(Type),
     ArgumentListTooLong,
     ConflictingBindings(String, Type, Type),
 }
@@ -39,6 +40,9 @@ impl ToString for TypeError {
             }
             TypeError::ExpectedTuple => {
                 format!("TypeError: expected tuple")
+            }
+            TypeError::ExpectedFunction(t) => {
+                format!("TypeError: expected function type {}", t.to_string())
             }
             TypeError::ArgumentListTooLong => {
                 format!("TypeError: argument list is too long")

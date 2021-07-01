@@ -23,20 +23,16 @@ impl TypeRefinement {
         self.bindings.get(v)
     }
 
-    /// Modifies this TypeRefinement by inserting (or replacing) a binding.
-    pub fn bind(mut self, v: String, t: Type) -> TypeRefinement {
-        self.bindings.insert(v, t); self
-    }
-
     /// Safely combine two type refinements. Returns ConflictingBindings on error.
-    pub fn combine(mut self, then: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
-        for (k, v) in then.bindings.into_iter() {
-            match self.bindings.get(&k) {
-                Some(t) => return Err(TypeError::ConflictingBindings(k, t.clone(), v)),
-                None => self.bindings.insert(k, v),
+    /// TODO! Check this logic
+    pub fn combine(self, mut then: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+        for (k, t1) in self.bindings.into_iter() {
+            match then.bindings.get(&k) {
+                Some(t2) => { then = unify(&t1, &t2.clone(), then)?; }
+                None => { then.bindings.insert(k, t1); }
             };
         }
-        Ok(self)
+        Ok(then)
     }
 
     /// Resolves all bound type variables in the given type. Doesn't check for circular bindings.
@@ -56,19 +52,21 @@ impl TypeRefinement {
 }
 
 /// Adds bindings to the type refinement to make the two types equal.
-pub fn unify(t1: &Type, t2: &Type, rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+pub fn unify(t1: &Type, t2: &Type, mut rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
     match (t1, t2) {
         (Type::Any, _) |
         (_, Type::Any) => Ok(rf),
         (Type::Unknown, _) | (_, Type::Unknown) => Ok(rf),
+        (Type::TVar(v1), Type::TVar(v2)) if v1.eq(v2) => Ok(rf),
         (Type::TVar(v), t) |
         (t, Type::TVar(v)) => {
             let x = rf.lookup(v);
             if let Some(t2) = x {
                 unify(t, &t2.clone(), rf)
             } else if !rf.refine(t.clone()).contains_var(v) {
-                Ok(rf.bind(v.clone(), t.clone()))
-            } else { Err(TypeError::UnificationFailed(Type::TVar(v.clone()), t2.clone())) }
+                rf.bindings.insert(v.clone(), t.clone());
+                Ok(rf)
+            } else { Err(TypeError::UnificationFailed(rf.refine(t1.clone()), rf.refine(t2.clone()))) }
         }
         (Type::Func(args1, ret1), Type::Func(args2, ret2)) => {
             if args1.len() != args2.len() { return Err(TypeError::ArgumentListTooLong); }

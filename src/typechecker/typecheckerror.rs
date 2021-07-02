@@ -7,7 +7,6 @@ use super::Type;
 
 #[derive(Debug)]
 pub enum TypeError {
-    UnknownIdentifier(String),
     UnificationFailed(Type, Type),
     CannotTypeCheckDot,
     CannotTypeCheckDollar,
@@ -15,7 +14,8 @@ pub enum TypeError {
     ExpectedTuple,
     ExpectedFunction(Type),
     ArgumentListTooLong,
-    ConflictingBindings(String, Type, Type),
+    FlatTraverseFailed,
+    ExpectedOne,
 }
 
 pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
@@ -23,9 +23,6 @@ pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
 impl ToString for TypeError {
     fn to_string(&self) -> String {
         match self {
-            TypeError::UnknownIdentifier(id) => {
-                format!("TypeError: unknown identifier '{}'", id)
-            }
             TypeError::UnificationFailed(t1, t2) => {
                 format!("TypeError: cannot unify types {} and {}", t1.to_string(), t2.to_string())
             }
@@ -47,8 +44,11 @@ impl ToString for TypeError {
             TypeError::ArgumentListTooLong => {
                 format!("TypeError: argument list is too long")
             }
-            TypeError::ConflictingBindings(v, t1, t2) => {
-                format!("TypeError: conflicting bindings for {}: {} and {}", v, t1.to_string(), t2.to_string())
+            TypeError::FlatTraverseFailed => {
+                format!("TypeError: flat traverse failed")
+            }
+            TypeError::ExpectedOne => {
+                format!("TypeError: expected a single type")
             }
         }
     }

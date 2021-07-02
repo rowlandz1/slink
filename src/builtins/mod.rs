@@ -21,9 +21,9 @@ pub fn get_builtin(name: &String) -> Option<SciVal> {
     internals::get_builtin_function(&name)
 }
 
-/// Returns the type of a builtin construct.
-pub fn get_builtin_type(name: &str) -> Option<Type> {
-    builtintypes::get_builtin_type(name)
+/// Returns the type(s) of a builtin construct.
+pub fn type_check_builtin(name: &str) -> Vec<Type> {
+    builtintypes::type_check_builtin(name)
 }
 
 // Applies the arguments to the internal function.

@@ -82,7 +82,6 @@ impl ToString for Type {
                 format!("({}) -> {}", params.join(", "), r.to_string())
             }
             Type::Any => String::from("_"),
-            Type::Unknown => String::from("Unknown"),
         }
     }
 }

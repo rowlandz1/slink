@@ -4,76 +4,72 @@
  */
 
 use std::collections::HashMap;
-use super::Type;
+use super::{Type, TypeRefinement};
 use super::typecheckerror::{TypeError, TypeCheckResult};
-
-/// A mapping from type variables to more specific types
-#[derive(Debug, Clone)]
-pub struct TypeRefinement {
-    bindings: HashMap<String, Type>
-}
 
 impl TypeRefinement {
     pub fn new() -> TypeRefinement {
-        TypeRefinement{bindings: HashMap::new()}
+        TypeRefinement{bindings: vec![HashMap::new()]}
     }
 
-    /// Lookup a type-variable binding
-    pub fn lookup(&self, v: &String) -> Option<&Type> {
-        self.bindings.get(v)
+    pub fn pure(binding: HashMap<String, Type>) -> TypeRefinement {
+        TypeRefinement{bindings: vec![binding]}
     }
 
-    /// Safely combine two type refinements. Returns ConflictingBindings on error.
-    /// TODO! Check this logic
-    pub fn combine(self, mut then: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
-        for (k, t1) in self.bindings.into_iter() {
-            match then.bindings.get(&k) {
-                Some(t2) => { then = unify(&t1, &t2.clone(), then)?; }
-                None => { then.bindings.insert(k, t1); }
-            };
+    /// Apply a unify-esque function on each possible binding
+    pub fn flat_traverse<F>(self, mut f: F) -> TypeCheckResult<TypeRefinement>
+    where F: FnMut(HashMap<String,Type>) -> TypeCheckResult<TypeRefinement> {
+        let bindings = self.bindings.into_iter().flat_map(|b| match f(b) {
+            Ok(rf) => rf.bindings,
+            Err(_) => vec![],
+        }).collect::<Vec<HashMap<String, Type>>>();
+        match bindings.len() {
+            0 => Err(TypeError::FlatTraverseFailed),
+            _ => Ok(TypeRefinement{bindings})
         }
-        Ok(then)
     }
 
-    /// Resolves all bound type variables in the given type. Doesn't check for circular bindings.
-    pub fn refine(&self, typ: Type) -> Type {
-        match typ {
-            Type::List(t) => Type::list(self.refine(*t)),
-            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t| self.refine(t)).collect()),
-            Type::Func(paramtypes, rettype) => Type::Func(
-                paramtypes.into_iter().map(|t| self.refine(t)).collect(),
-                Box::new(self.refine(*rettype))),
-            Type::TVar(v) => if let Some(repl) = self.bindings.get(&v) {
-                self.refine(repl.clone())
-            } else { Type::TVar(v) }
-            typ => typ
+    pub fn expect_one(mut self) -> TypeCheckResult<HashMap<String,Type>> {
+        match self.bindings.len() {
+            1 => Ok(self.bindings.pop().unwrap()),
+            _ => Err(TypeError::ExpectedOne)
         }
+    }
+}
+
+pub fn unify(t1: &Type, t2: &Type, rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+    let bindings = rf.bindings.into_iter().flat_map(|rf| match unify_one(t1, t2, rf) {
+        Ok(binding) => vec![binding],
+        Err(_) => vec![],
+    }).collect::<Vec<HashMap<String, Type>>>();
+    match bindings.len() {
+        0 => Err(TypeError::FlatTraverseFailed),
+        _ => Ok(TypeRefinement{bindings})
     }
 }
 
 /// Adds bindings to the type refinement to make the two types equal.
-pub fn unify(t1: &Type, t2: &Type, mut rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+fn unify_one(t1: &Type, t2: &Type, mut rf: HashMap<String, Type>) -> TypeCheckResult<HashMap<String, Type>> {
     match (t1, t2) {
         (Type::Any, _) |
         (_, Type::Any) => Ok(rf),
-        (Type::Unknown, _) | (_, Type::Unknown) => Ok(rf),
         (Type::TVar(v1), Type::TVar(v2)) if v1.eq(v2) => Ok(rf),
         (Type::TVar(v), t) |
         (t, Type::TVar(v)) => {
-            let x = rf.lookup(v);
+            let x = rf.get(v);
             if let Some(t2) = x {
-                unify(t, &t2.clone(), rf)
-            } else if !rf.refine(t.clone()).contains_var(v) {
-                rf.bindings.insert(v.clone(), t.clone());
+                unify_one(t, &t2.clone(), rf)
+            } else if !t.clone().replace_type_vars(&rf).contains_var(v) {
+                rf.insert(v.clone(), t.clone());
                 Ok(rf)
-            } else { Err(TypeError::UnificationFailed(rf.refine(t1.clone()), rf.refine(t2.clone()))) }
+            } else { Err(TypeError::UnificationFailed(t1.clone().replace_type_vars(&rf), t2.clone().replace_type_vars(&rf))) }
         }
         (Type::Func(args1, ret1), Type::Func(args2, ret2)) => {
             if args1.len() != args2.len() { return Err(TypeError::ArgumentListTooLong); }
             let rf = unify_pairs(args1, args2, rf)?;
-            unify(ret1, ret2, rf)
+            unify_one(ret1, ret2, rf)
         }
-        (Type::List(a), Type::List(b)) => unify(a, b, rf),
+        (Type::List(a), Type::List(b)) => unify_one(a, b, rf),
         (Type::Tuple(types1), Type::Tuple(types2)) => if types1.len() == types2.len() {
             unify_pairs(types1, types2, rf)
         } else { Err(TypeError::UnificationFailed(Type::Tuple(types1.clone()), Type::Tuple(types2.clone()))) }
@@ -83,18 +79,21 @@ pub fn unify(t1: &Type, t2: &Type, mut rf: TypeRefinement) -> TypeCheckResult<Ty
     }
 }
 
-pub fn unify_pairs(types1: &Vec<Type>, types2: &Vec<Type>, mut rf: TypeRefinement) -> TypeCheckResult<TypeRefinement> {
+pub fn unify_pairs(types1: &Vec<Type>, types2: &Vec<Type>, mut rf: HashMap<String, Type>) -> TypeCheckResult<HashMap<String, Type>> {
     if types1.len() != types2.len() { panic!("Error, cannot unify pairs if vectors are not the same size"); }
     for (t1, t2) in types1.iter().zip(types2.iter()) {
-        rf = unify(t1, t2, rf)?;
+        rf = unify_one(t1, t2, rf)?;
     }
     Ok(rf)
 }
 
 impl Type {
+    // Resolves all bound type variables in the given type. Doesn't check for circular bindings.
     pub fn replace_type_vars(self, replacements: &HashMap<String, Type>) -> Type {
         match self {
-            Type::TVar(v) => if let Some(t) = replacements.get(&v) { t.clone() } else { Type::TVar(v) }
+            Type::TVar(v) => if let Some(t) = replacements.get(&v) {
+                t.clone().replace_type_vars(replacements)
+            } else { Type::TVar(v) }
             Type::List(t) => Type::list(t.replace_type_vars(replacements)),
             Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t| t.replace_type_vars(replacements)).collect()),
             Type::Func(args, ret) => Type::Func(

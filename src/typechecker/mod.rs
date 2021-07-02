@@ -8,9 +8,10 @@ mod types;
 
 use std::collections::HashMap;
 use crate::ast::{AstExpr as E, AstStmt};
-use crate::builtins::get_builtin_type;
+use crate::builtins::type_check_builtin;
 use typecheckerror::{TypeCheckResult, TypeError};
-use types::{TypeRefinement as TR, unify, unify_pairs, fresh_type_var};
+use types::{unify, unify_pairs, fresh_type_var};
+use TypeRefinement as TR;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -22,8 +23,13 @@ pub enum Type {
     Tuple(Vec<Type>),
     TVar(String),
     Func(Vec<Type>, Box<Type>),
-    Any,    // used for ?-argument syntax
-    Unknown,
+    Any,    // the type of underscore arguments
+}
+
+/// A mapping from type variables to more specific types
+#[derive(Debug, Clone)]
+pub struct TypeRefinement {
+    bindings: Vec<HashMap<String, Type>>
 }
 
 pub struct TypeEnv {
@@ -97,7 +103,13 @@ impl TypeEnv {
         let mut i = 0;
         let typ = Type::TVar(fresh_type_var(&mut i));
         let rf = self.type_check_helper(expr, &typ, &mut i, TR::new())?;
-        Ok(rf.refine(typ))
+        
+        // DEBUG
+        for rf in rf.bindings.iter() {
+            println!("{}", typ.clone().replace_type_vars(rf).to_string());
+        }
+
+        Ok(typ.replace_type_vars(&rf.expect_one()?))
     }
 
     /// Unifies the type of the expression with the hint and returns the necessary bindings. The i is
@@ -124,22 +136,22 @@ impl TypeEnv {
                 // actually typecheck the expression now
                 self.push_new_frame(params.clone(), paramtypes);
                 let rf = self.type_check_helper(body, &rettype, i, rf)?;
-                let paramtypes = self.pop_frame().into_iter().map(|t| rf.refine(t)).collect::<Vec<Type>>();
-                let typ = Type::Func(paramtypes, Box::new(rettype));
-                unify(&typ, hint, rf)
+                let paramtypes = self.pop_frame();
+                unify(&Type::Func(paramtypes, Box::new(rettype)), hint, rf)
             }
             E::FunApp(f, args) => {
 
                 // type check the function expression
                 let ftype = Type::TVar(fresh_type_var(i));
-                let mut rf = self.type_check_helper(f, &ftype, i, rf)?;
+                let rf = self.type_check_helper(f, &ftype, i, rf)?;
 
-                match rf.refine(ftype) {
+                rf.flat_traverse(|rf| match ftype.clone().replace_type_vars(&rf) {
                     Type::Func(mut paramtypes, rettype) => {
                         if paramtypes.len() < args.len() { return Err(TypeError::ArgumentListTooLong); }
                         let appliedparams = paramtypes.split_off(paramtypes.len() - args.len());
 
                         // type check arguments
+                        let mut rf = TR::pure(rf);
                         for (arg, paramtype) in args.into_iter().zip(appliedparams.into_iter()) {
                             match arg {
                                 E::Id(x) if x.eq("_") => paramtypes.push(paramtype),
@@ -155,6 +167,7 @@ impl TypeEnv {
                     Type::TVar(v) => {
                         // type check arguments
                         let mut argtypes: Vec<Type> = Vec::new();
+                        let mut rf = TR::pure(rf);
                         for arg in args {
                             let t = Type::TVar(fresh_type_var(i));
                             rf = self.type_check_helper(arg, &t, i, rf)?;
@@ -165,7 +178,7 @@ impl TypeEnv {
                         unify(&Type::TVar(v), &Type::Func(argtypes, Box::new(rettype)), rf)
                     }
                     ftype => Err(TypeError::ExpectedFunction(ftype))
-                }
+                })
             }
             E::FunKwApp(_f, _args) => Ok(rf),
             E::ListIdx(_expr, _slice) => Ok(rf),
@@ -176,34 +189,35 @@ impl TypeEnv {
                     "$" => return self.type_check_dollar(lhs, rhs, hint, i, rf),
                     _ => {}
                 }
-                let optype = match op.as_str() {
-                    "+"  => get_builtin_type("op+"),
-                    "-"  => get_builtin_type("op-"),
-                    "*"  => get_builtin_type("op*"),
-                    "/"  => get_builtin_type("op/"),
-                    "%"  => get_builtin_type("op%"),
-                    "**" => get_builtin_type("op**"),
-                    "==" => get_builtin_type("op=="),
-                    "!=" => get_builtin_type("op!="),
-                    "<=" => get_builtin_type("op<="),
-                    ">=" => get_builtin_type("op>="),
-                    "<"  => get_builtin_type("op<"),
-                    ">"  => get_builtin_type("op>"),
-                    "&&" => Some(Type::func2(Type::Bool, Type::Bool, Type::Bool)),
-                    "||" => Some(Type::func2(Type::Bool, Type::Bool, Type::Bool)),
+                let optype = Type::TVar(fresh_type_var(i));
+                let rf = match op.as_str() {
+                    "+"  => self.type_check_builtin("op+", &optype, i, rf),
+                    "-"  => self.type_check_builtin("op-", &optype, i, rf),
+                    "*"  => self.type_check_builtin("op*", &optype, i, rf),
+                    "/"  => self.type_check_builtin("op/", &optype, i, rf),
+                    "%"  => self.type_check_builtin("op%", &optype, i, rf),
+                    "**" => self.type_check_builtin("op**", &optype, i, rf),
+                    "==" => self.type_check_builtin("op==", &optype, i, rf),
+                    "!=" => self.type_check_builtin("op!=", &optype, i, rf),
+                    "<=" => self.type_check_builtin("op<=", &optype, i, rf),
+                    ">=" => self.type_check_builtin("op>=", &optype, i, rf),
+                    "<"  => self.type_check_builtin("op<", &optype, i, rf),
+                    ">"  => self.type_check_builtin("op>", &optype, i, rf),
+                    "&&" => self.type_check_builtin("&&", &optype, i, rf),
+                    "||" => self.type_check_builtin("||", &optype, i, rf),
                     _ => panic!("Unrecognized binary operator")
-                }.unwrap().refresh_type_vars(i);
-                match optype {
+                }?;
+                rf.flat_traverse(|rf| match optype.clone().replace_type_vars(&rf) {
                     Type::Func(argtypes, rettype) => {
                         if argtypes.len() != 2 { panic!("Binary op type is not binary"); }
-                        let rf = self.type_check_helper(lhs, &argtypes[0], i, rf)?;
+                        let rf = self.type_check_helper(lhs, &argtypes[0], i, TR::pure(rf))?;
                         let rf = self.type_check_helper(rhs, &argtypes[1], i, rf)?;
                         unify(&*rettype, hint, rf)
                     }
                     Type::TVar(v) => {
                         let lhstype = Type::TVar(fresh_type_var(i));
                         let rhstype = Type::TVar(fresh_type_var(i));
-                        let rf = self.type_check_helper(lhs, &lhstype, i, rf)?;
+                        let rf = self.type_check_helper(lhs, &lhstype, i, TR::pure(rf))?;
                         let rf = self.type_check_helper(rhs, &rhstype, i, rf)?;
                         
                         let rettype = Type::TVar(fresh_type_var(i));
@@ -211,7 +225,7 @@ impl TypeEnv {
                         unify(&Type::TVar(v), &Type::func2(lhstype, rhstype, rettype), rf)
                     }
                     optype => Err(TypeError::ExpectedFunction(optype))
-                }
+                })
             }
             E::Unop(op, expr) => {
                 let optype = match op.as_str() {
@@ -267,9 +281,23 @@ impl TypeEnv {
             E::Id(x) if x.eq("_") => Ok(rf),
             E::Id(x) => {
                 if let Some(t) = self.get(x, i) { unify(&t, hint, rf) }
-                else if let Some(t) = get_builtin_type(x) { unify(&t.refresh_type_vars(i), hint, rf) }
-                else { Err(TypeError::UnknownIdentifier(x.clone())) }
+                else { self.type_check_builtin(&x, hint, i, rf) }
+//                else if let Some(t) = get_builtin_type(x) { unify(&t.refresh_type_vars(i), hint, rf) }
+//                else { Err(TypeError::UnknownIdentifier(x.clone())) }
             }
+        }
+    }
+
+    fn type_check_builtin(&mut self, name: &str, hint: &Type, i: &mut u32, rf: TR) -> TypeCheckResult<TR> {
+        let bindings = type_check_builtin(name).into_iter().flat_map(|typ| {
+            match unify(&typ.refresh_type_vars(i), hint, rf.clone()) {
+                Ok(rf) => rf.bindings,
+                Err(_) => vec![],
+            }
+        }).collect::<Vec<HashMap<String, Type>>>();
+        match bindings.len() {
+            0 => Err(TypeError::FlatTraverseFailed),
+            _ => Ok(TR{bindings})
         }
     }
 
@@ -280,24 +308,24 @@ impl TypeEnv {
         let rf = self.type_check_helper(lhs, &lhstype, i, rf)?;
         let rf = self.type_check_helper(rhs, &rhstype, i, rf)?;
 
-        match (rf.refine(lhstype), rf.refine(rhstype)) {
+        rf.flat_traverse(|rf| match (lhstype.clone().replace_type_vars(&rf), rhstype.clone().replace_type_vars(&rf)) {
             (Type::TVar(_), _) => Err(TypeError::CannotTypeCheckDot),
             (Type::Func(args1, ret1), Type::Func(mut args2, ret2)) => {
                 if args2.len() != 1 { return Err(TypeError::ArgumentListTooLong); }
-                let rf = unify(&*ret1, &args2.pop().unwrap(), rf)?;
+                let rf = unify(&*ret1, &args2.pop().unwrap(), TR::pure(rf))?;
                 unify(&Type::Func(args1, ret2), hint, rf)
             }
             (lhstype, Type::Func(mut args2, ret2)) => {
                 if args2.len() != 1 { return Err(TypeError::ArgumentListTooLong); }
-                let rf = unify(&lhstype, &args2.pop().unwrap(), rf)?;
+                let rf = unify(&lhstype, &args2.pop().unwrap(), TR::pure(rf))?;
                 unify(&*ret2, hint, rf)
             }
             (lhstype, rhstype) => {
                 let rettype = Type::TVar(fresh_type_var(i));
-                let rf = unify(&rettype, hint, rf)?;
+                let rf = unify(&rettype, hint, TR::pure(rf))?;
                 unify(&rhstype, &Type::func1(lhstype.clone(), rettype), rf)
             }
-        }
+        })
     }
 
     /// Type check a dollar expression given the left and right expression types
@@ -307,23 +335,23 @@ impl TypeEnv {
         let rf = self.type_check_helper(lhs, &lhstype, i, rf)?;
         let rf = self.type_check_helper(rhs, &rhstype, i, rf)?;
 
-        match (rf.refine(lhstype), rf.refine(rhstype)) {
+        rf.flat_traverse(|rf| match (lhstype.clone().replace_type_vars(&rf), rhstype.clone().replace_type_vars(&rf)) {
             (Type::Func(args1, ret1), Type::Func(args2, ret2)) => {
                 if let Type::Tuple(ret1) = *ret1 {
                     if args2.len() != ret1.len() { return Err(TypeError::ArityMistmatch); }
                     let rf = unify_pairs(&ret1, &args2, rf)?;
-                    unify(&Type::Func(args1, ret2), hint, rf)
+                    unify(&Type::Func(args1, ret2), hint, TR::pure(rf))
                 } else { Err(TypeError::ExpectedTuple) }
             }
             (Type::Tuple(lhs), Type::Func(args2, ret2)) => {
                 if args2.len() != lhs.len() { return Err(TypeError::ArityMistmatch); }
                 let rf = unify_pairs(&lhs, &args2, rf)?;
-                unify(&ret2, hint, rf)
+                unify(&ret2, hint, TR::pure(rf))
             }
             (Type::Func(args1, ret1), Type::TVar(v)) => {
                 if let Type::Tuple(ret1) = *ret1 {
                     let ret2 = Box::new(Type::TVar(fresh_type_var(i)));
-                    let rf = unify(&Type::TVar(v), &Type::Func(ret1.clone(), ret2.clone()), rf)?;
+                    let rf = unify(&Type::TVar(v), &Type::Func(ret1.clone(), ret2.clone()), TR::pure(rf))?;
                     unify(&Type::Func(args1, ret2), hint, rf)
                 } else { Err(TypeError::ExpectedTuple) }
             }
@@ -333,15 +361,13 @@ impl TypeEnv {
                 unify(&ret2, hint, rf)
             }
             _ => Err(TypeError::CannotTypeCheckDollar)
-        }
+        })
     }
 }
 
 impl Type {
     pub fn list(t: Type) -> Type { Type::List(Box::new(t)) }
-    pub fn tup2(t1: Type, t2: Type) -> Type { Type::Tuple(vec![t1, t2]) }
     pub fn var(v: &str) -> Type { Type::TVar(String::from(v)) }
     pub fn func1(arg: Type, ret: Type) -> Type { Type::Func(vec![arg], Box::new(ret)) }
     pub fn func2(arg1: Type, arg2: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2], Box::new(ret)) }
-    pub fn func3(arg1: Type, arg2: Type, arg3: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2, arg3], Box::new(ret)) }
 }

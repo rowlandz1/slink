@@ -4,7 +4,7 @@
  */
 
 use crate::callable::Callable;
-use crate::typechecker::Type;
+use crate::types::Type;
 use crate::value::SciVal;
 
 impl ToString for SciVal {

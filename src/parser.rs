@@ -9,7 +9,7 @@ use pest::Parser;
 use pest::iterators::Pair;
 use std::collections::HashMap;
 use crate::ast::{AstExpr as E, AstStmt, AstSlice};
-use crate::typechecker::Type;
+use crate::types::Type;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]

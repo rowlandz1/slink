@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use crate::error::EvalResult;
 use crate::value::SciVal;
 use crate::number::Number::Float;
-use crate::typechecker::Type;
+use crate::types::Type;
 
 pub fn get_builtin(name: &String) -> Option<SciVal> {
     match name.as_str() {

@@ -8,7 +8,7 @@ mod number;
 mod parser;
 mod print;
 mod replhelper;
-mod typechecker;
+mod types;
 mod value;
 
 extern crate pest;
@@ -34,7 +34,7 @@ fn main() {
     }
 
     let mut environ = exec::Environ::new();
-    let mut typenv = typechecker::TypeEnv::new();
+    let mut typenv = types::TypeEnv::new();
 
     // Setup rustyline
     let mut rl = Editor::<replhelper::MyHelper>::new();

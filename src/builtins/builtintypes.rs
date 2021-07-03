@@ -4,7 +4,7 @@
  */
 
 use crate::parser::parse_type;
-use crate::typechecker::Type as T;
+use crate::types::Type as T;
 
 macro_rules! ts {
     ( $( $x:literal ),* ) => (vec![$(parse_type($x.to_owned(), &vec!["A".to_owned(), "B".to_owned(), "C".to_owned()])),*])

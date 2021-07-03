@@ -5,7 +5,7 @@
  */
 
 use std::collections::HashMap;
-use crate::typechecker::Type;
+use crate::types::Type;
 
 #[derive(Debug, Clone)]
 pub enum AstStmt {

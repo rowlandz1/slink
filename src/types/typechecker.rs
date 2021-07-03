@@ -4,7 +4,7 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::{AstExpr as E, AstStmt};
+use crate::ast::{AstExpr as E, AstSlice, AstStmt};
 use crate::builtins::type_check_builtin;
 use super::{Type, TypeEnv, fresh_type_var};
 use super::typecheckerror::{TypeCheckResult, TypeError};
@@ -62,7 +62,6 @@ impl TypeEnv {
                 unify(&Type::Func(paramtypes, Box::new(rettype)), hint, rs)
             }
             E::FunApp(f, args) => {
-
                 // type check the function expression
                 let ftype = Type::TVar(fresh_type_var(i));
                 let rs = self.typecheck_expr(f, &ftype, i, rs);
@@ -102,9 +101,50 @@ impl TypeEnv {
                     _ => vec![]
                 }).collect::<RS>()
             }
-            E::FunKwApp(_f, _args) => rs,
-            E::ListIdx(_expr, _slice) => rs,
-            E::MatrixIdx(_expr, _slice1, _slice2) => rs,
+            E::FunKwApp(_f, _args) => todo!(),
+            E::ListIdx(expr, slice) => {
+                let ltype = Type::TVar(fresh_type_var(i));
+                let rs = self.typecheck_expr(expr, &ltype, i, rs);
+                let rs = self.typecheck_slice(slice, i, rs);
+
+                rs.into_iter().flat_map(|r| match ltype.clone().refine(&r) {
+                    Type::List(item) => match slice {
+                        AstSlice::Single(_) => unify(&*item, hint, vec![r]),
+                        AstSlice::Range(_,_) => unify(&Type::List(item), hint, vec![r])
+                    }
+                    Type::Func(paramtypes, rettype) => match *rettype {
+                        Type::List(item) => match slice {
+                            AstSlice::Single(_) => unify(&Type::Func(paramtypes, item), hint, vec![r]),
+                            AstSlice::Range(..) => unify(&Type::Func(paramtypes, Box::new(Type::List(item))), hint, vec![r])
+                        }
+                        Type::Str => unify(&Type::Func(paramtypes, Box::new(Type::Str)), hint, vec![r]),
+                        _ => vec![]
+                    }
+                    Type::Str => unify(&Type::Str, hint, vec![r]),
+                    _ => vec![]
+                }).collect::<RS>()
+            }
+            E::MatrixIdx(expr, slice1, slice2) => {
+                let mtype = Type::TVar(fresh_type_var(i));
+                let rs = self.typecheck_expr(expr, &mtype, i, rs);
+                let rs = self.typecheck_slice(slice1, i, rs);
+                let rs = self.typecheck_slice(slice2, i, rs);
+                
+                rs.into_iter().flat_map(|r| match mtype.clone().refine(&r) {
+                    Type::Mat => match (slice1, slice2) {
+                        (AstSlice::Single(_), AstSlice::Single(_)) => unify(&Type::Num, hint, vec![r]),
+                        _ => unify(&Type::Mat, hint, vec![r])
+                    }
+                    Type::Func(paramtypes, rettype) => match *rettype {
+                        Type::Mat => match (slice1, slice2) {
+                            (AstSlice::Single(_), AstSlice::Single(_)) => unify(&Type::Func(paramtypes, Box::new(Type::Num)), hint, vec![r]),
+                            _ => unify(&Type::Func(paramtypes, Box::new(Type::Mat)), hint, vec![r])
+                        }
+                        _ => vec![]
+                    }
+                    _ => vec![]
+                }).collect::<RS>()
+            }
             E::Binop(op, lhs, rhs) => {
                 match op.as_str() {
                     "." => return self.typecheck_dot(lhs, rhs, hint, i, rs),
@@ -257,5 +297,17 @@ impl TypeEnv {
             }
             _ => vec![]
         }).collect::<RS>()
+    }
+
+    /// Make sure the indices have type `Num`
+    fn typecheck_slice(&mut self, slice: &AstSlice, i: &mut u32, mut rs: RS) -> RS {
+        match slice {
+            AstSlice::Single(idx) => self.typecheck_expr(idx, &Type::Num, i, rs),
+            AstSlice::Range(idx1, idx2) => {
+                if let Some(idx1) = idx1 { rs = self.typecheck_expr(idx1, &Type::Num, i, rs); }
+                if let Some(idx2) = idx2 { rs = self.typecheck_expr(idx2, &Type::Num, i, rs); }
+                rs
+            }
+        }
     }
 }

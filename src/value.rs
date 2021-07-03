@@ -158,6 +158,7 @@ impl SciVal {
         }
     }
 
+    /// Defines behavior for "==" and "!=" operators
     pub fn equals(&self, rhs: &SciVal) -> EvalResult<SciVal> {
         match (self, rhs) {
             (V::Bool(b1), V::Bool(b2)) => Ok(V::Bool(b1 == b2)),
@@ -166,8 +167,8 @@ impl SciVal {
                 if r1 != r2 || c1 != c2 { return Ok(V::Bool(false)); }
                 Ok(V::Bool(m1.iter().zip(m2.iter()).all(|p|{ p.0 == p.1 })))
             }
-            (V::List(v1), V::List(v2)) |
-            (V::Tuple(v1), V::Tuple(v2)) => {
+            (V::Str(s1), V::Str(s2)) => Ok(V::Bool(s1 == s2)),
+            (V::List(v1), V::List(v2)) => {
                 for (a, b) in v1.iter().zip(v2.iter()) {
                     if let V::Bool(false) = a.equals(b)? { return Ok(V::Bool(false)); }
                 }

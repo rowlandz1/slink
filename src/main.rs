@@ -20,10 +20,6 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::env;
 
-// #[derive(Parser)]
-// #[grammar = "grammar.pest"]
-// pub struct SciLangParser;
-
 fn main() {
 
     // command line arguments
@@ -39,9 +35,7 @@ fn main() {
     // Setup rustyline
     let mut rl = Editor::<replhelper::MyHelper>::new();
     rl.set_helper(Some(replhelper::MyHelper::new()));
-    //if rl.load_history("history.txt").is_err() {
-    //    println!("No previous history.");
-    //}
+    if rl.load_history("history.txt").is_err() {};
 
     // REPL
     loop {
@@ -49,10 +43,13 @@ fn main() {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
 
-                let ast = parser::parse_stmt(line);
+                let ast = match parser::parse_stmt(&line) {
+                    Ok(ast) => ast,
+                    Err(err) => { eprintln!("{:?}", err); continue; }
+                };
 
-                match &ast {
-                    ast::AstStmt::Assign(_, _) => {
+                match *ast.stmt {
+                    ast::Stmt::Assign(_, _) => {
                         match typenv.type_check_stmt(&ast) {
                             Ok(_) => {}
                             Err(err) => eprintln!("{}", err.to_string()),
@@ -62,7 +59,7 @@ fn main() {
                             Err(err) => eprintln!("{}", err.to_string()),
                         }
                     }
-                    ast::AstStmt::Display(_) => {
+                    ast::Stmt::Display(_) => {
                         let typ = match typenv.type_check_stmt(&ast) {
                             Ok(typ) => typ,
                             Err(err) => { eprintln!("{}", err.to_string()); continue; }
@@ -89,7 +86,7 @@ fn main() {
             }
         }
     }
-    //rl.save_history("history.txt").unwrap();
+    rl.save_history("history.txt").unwrap();
 }
 
 fn interpret_file(_srcfile: &str) {

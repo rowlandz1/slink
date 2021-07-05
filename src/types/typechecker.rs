@@ -4,10 +4,10 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::{AstExpr as E, AstSlice, AstStmt};
+use crate::ast::{Expr as E, ExprA, AstSlice, Stmt, StmtA};
 use crate::builtins::type_check_builtin;
+use crate::error::{TypeCheckResult, TypeError};
 use super::{Type, TypeEnv, fresh_type_var};
-use super::typecheckerror::{TypeCheckResult, TypeError};
 use super::unifier::{unify, unify_pairs};
 use Refinements as RS;
 
@@ -18,15 +18,15 @@ pub type Refinements = Vec<Refinement>;
 impl TypeEnv {
     /// Type checks expressions within a statement. If the statement is a display,
     /// the type in string form is returned.
-    pub fn type_check_stmt(&mut self, stmt: &AstStmt) -> TypeCheckResult<String> {
-        match stmt {
-            AstStmt::Assign(v, expr) => {
+    pub fn type_check_stmt(&mut self, stmt: &StmtA) -> TypeCheckResult<String> {
+        match &*stmt.stmt {
+            Stmt::Assign(v, expr) => {
                 let mut types = self.get_expr_types(expr);
                 if types.len() != 1 { return Err(TypeError::ExpectedOne); }
                 self.var_types.insert(v.clone(), types.pop().unwrap());
                 Ok(String::from(""))
             }
-            AstStmt::Display(expr) => {
+            Stmt::Display(expr) => {
                 let types = self.get_expr_types(expr);
                 let output = types.into_iter().map(|t| t.to_string()).collect::<Vec<String>>().join("\n");
                 Ok(output)
@@ -36,8 +36,8 @@ impl TypeEnv {
 
     /// Main type checking function for expressions. Binds `hint` to the type of `expr` by
     /// modifying the refinements `rs`. The `i` is used to generate new type variables.
-    pub fn typecheck_expr(&mut self, expr: &E, hint: &Type, i: &mut u32, mut rs: RS) -> RS {
-        match expr {
+    pub fn typecheck_expr(&mut self, expr: &ExprA, hint: &Type, i: &mut u32, mut rs: RS) -> RS {
+        match &*expr.expr {
             E::Lambda(params, body, typeparams, paramtypes, rettype) => {
                 // replace type parameters with fresh type variables
                 let mut hm: HashMap<String, Type> = HashMap::new();
@@ -74,7 +74,7 @@ impl TypeEnv {
                         // type check arguments
                         let mut rs = vec![r];
                         for (arg, paramtype) in args.into_iter().zip(appliedparams.into_iter()) {
-                            match arg {
+                            match &*arg.expr {
                                 E::Id(x) if x.eq("_") => paramtypes.push(paramtype),
                                 _ => rs = self.typecheck_expr(arg, &paramtype, i, rs),
                             }
@@ -238,7 +238,7 @@ impl TypeEnv {
         }).collect::<RS>()
     }
 
-    fn typecheck_dot(&mut self, lhs: &E, rhs: &E, hint: &Type, i: &mut u32, rs: RS) -> RS {
+    fn typecheck_dot(&mut self, lhs: &ExprA, rhs: &ExprA, hint: &Type, i: &mut u32, rs: RS) -> RS {
         let lhstype = Type::TVar(fresh_type_var(i));
         let rhstype = Type::TVar(fresh_type_var(i));
         let rs = self.typecheck_expr(lhs, &lhstype, i, rs);
@@ -264,7 +264,7 @@ impl TypeEnv {
         }).collect::<RS>()
     }
 
-    fn typecheck_dollar(&mut self, lhs: &E, rhs: &E, hint: &Type, i: &mut u32, rs: RS) -> RS {
+    fn typecheck_dollar(&mut self, lhs: &ExprA, rhs: &ExprA, hint: &Type, i: &mut u32, rs: RS) -> RS {
         let lhstype = Type::TVar(fresh_type_var(i));
         let rhstype = Type::TVar(fresh_type_var(i));
         let rs = self.typecheck_expr(lhs, &lhstype, i, rs);

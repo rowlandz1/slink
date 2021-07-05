@@ -4,7 +4,7 @@
  */
 
 use std::collections::HashMap;
-use crate::ast::AstExpr;
+use crate::ast::ExprA;
 use crate::error::{EvalError, EvalResult};
 use crate::exec::Environ;
 use crate::builtins::eval_builtin_function;
@@ -19,7 +19,7 @@ pub enum Callable {
         name: Option<String>,                   // closure name (for error tracing and recursion)
         params: Vec<String>,                    // unapplied parameter list
         app: HashMap<String, SciVal>,           // applied parameters
-        expr: Result<Box<AstExpr>, String>,     // inner expression (or string for internal functions)
+        expr: Result<ExprA, String>,     // inner expression (or string for internal functions)
         next: NextCall,                         // for function composition
     },
     ListSlice(Slice<i32, Option<i32>>, NextCall),
@@ -35,8 +35,8 @@ pub enum NextCall {
 
 impl Callable {
     pub fn closure(env: HashMap<String, SciVal>, name: Option<String>, params: Vec<String>,
-                   app: HashMap<String, SciVal>, expr: Result<AstExpr, String>) -> Callable {
-        Closure{env, name, params, app, expr: expr.map(Box::new), next: NoNext}
+                   app: HashMap<String, SciVal>, expr: Result<ExprA, String>) -> Callable {
+        Closure{env, name, params, app, expr: expr, next: NoNext}
     }
 
     pub fn mk_list_slice(slice: Slice<i32, Option<i32>>) -> Callable { ListSlice(slice, NoNext) }
@@ -58,7 +58,7 @@ impl Callable {
             if params.len() == 0 {
                 env.extend(app.into_iter());
                 let result = match expr {
-                    Ok(expr) => Environ::from_map(env).evaluate(*expr),
+                    Ok(expr) => Environ::from_map(env).evaluate(expr),
                     Err(name) => eval_builtin_function(name, env),
                 };
                 let result = match result {
@@ -119,7 +119,7 @@ impl Callable {
              if params.len() == 0 {
                  env.extend(app.into_iter());
                  let result = match expr {
-                     Ok(expr) => Environ::from_map(env).evaluate(*expr),
+                     Ok(expr) => Environ::from_map(env).evaluate(expr),
                      Err(name) => eval_builtin_function(name, env),
                  };
                  let result = match result {

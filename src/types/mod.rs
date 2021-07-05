@@ -3,12 +3,11 @@
  * Defines types type environments
  */
 
-pub mod typecheckerror;
 mod typechecker;
 mod unifier;
 
 use std::collections::HashMap;
-use crate::ast::AstExpr as E;
+use crate::ast::ExprA;
 use typechecker::Refinement;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -139,7 +138,7 @@ impl TypeEnv {
 
     /// Front end for expression type checking. Returns possible types for the given expression.
     /// Type names are normalized.
-    pub fn get_expr_types(&mut self, expr: &E) -> Vec<Type> {
+    pub fn get_expr_types(&mut self, expr: &ExprA) -> Vec<Type> {
         let mut i = 0;
         let typ = Type::TVar(fresh_type_var(&mut i));
         let rs = self.typecheck_expr(expr, &typ, &mut i, vec![HashMap::new()]);

@@ -7,7 +7,7 @@ use crate::parser::parse_type;
 use crate::types::Type as T;
 
 macro_rules! ts {
-    ( $( $x:literal ),* ) => (vec![$(parse_type($x.to_owned(), &vec!["A".to_owned(), "B".to_owned(), "C".to_owned()])),*])
+    ( $( $x:literal ),* ) => (vec![$(parse_type($x.to_owned(), &vec!["A".to_owned(), "B".to_owned(), "C".to_owned()]).unwrap()),*])
 }
 
 pub fn type_check_builtin(name: &str) -> Vec<T> {

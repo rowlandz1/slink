@@ -1,7 +1,26 @@
 /* error.rs
  *
- * Defines evaluation errors and error messages.
+ * Defines parsing errors, evaluation errors, and the corresponding error messages
  */
+
+use std::fmt;
+
+#[derive(Debug)]
+pub enum ParserError {
+    PestError(pest::error::Error<crate::parser::Rule>),
+    NonRectangularMatrix,
+    RepeatedParam,
+    RepeatedTypeParam,
+    InvalidTypeConstructor(String),
+    InvalidAtomicType(String),
+}
+pub type ParserResult<T> = std::result::Result<T, ParserError>;
+
+#[derive(Debug)]
+pub enum TypeError {
+    ExpectedOne,
+}
+pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
 
 #[derive(Debug)]
 pub enum EvalError {
@@ -19,50 +38,73 @@ pub enum EvalError {
     NothingToUnpack,
     InResolvedExpr(Box<EvalError>, String),
 }
-
 pub type EvalResult<T> = std::result::Result<T, EvalError>;
 
-impl ToString for EvalError {
-    fn to_string(&self) -> String {
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Parsing error: ")?;
+        match self {
+            Self::PestError(err) => write!(f, "{}", err),
+            Self::NonRectangularMatrix => write!(f, "Non-rectangular matrix."),
+            Self::RepeatedParam => write!(f, "Repeated parameter."),
+            Self::RepeatedTypeParam => write!(f, "Repeated type parameter."),
+            Self::InvalidTypeConstructor(t) => write!(f, "Invalid type constructor '{}'", t),
+            Self::InvalidAtomicType(t) => write!(f, "Invalid atomic type '{}'", t),
+        }
+    }
+}
+
+impl fmt::Display for TypeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Type checking error: ")?;
+        match self {
+            Self::ExpectedOne => write!(f, "Expected a single type"),
+        }
+    }
+}
+
+impl fmt::Display for EvalError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Evaluation error: ")?;
         match self {
             EvalError::InvalidMatrixShape => {
-                format!("Error: invalid matrix shape")
+                write!(f, "Error: invalid matrix shape")
             }
             EvalError::IncompatibleMatrixShapes => {
-                format!("Error: incompatible matrix shapes")
+                write!(f, "Error: incompatible matrix shapes")
             }
             EvalError::NoninvertableMatrix => {
-                format!("Error: noninvertable matrix")
+                write!(f, "Error: noninvertable matrix")
             }
             EvalError::ArityMismatch => {
-                format!("Error: arity mismatch")
+                write!(f, "Error: arity mismatch")
             }
             EvalError::TypeMismatch => {
-                format!("Error: type mismatch")
+                write!(f, "Error: type mismatch")
             }
             EvalError::TypeConversionError => {
-                format!("Error: type conversion error")
+                write!(f, "Error: type conversion error")
             }
             EvalError::UndefinedIdentifier(s) => {
-                format!("Error: undefined identifier '{}'", s)
+                write!(f, "Error: undefined identifier '{}'", s)
             }
             EvalError::OutOfRange => {
-                format!("Error: out of range")
+                write!(f, "Error: out of range")
             }
             EvalError::InvalidSlice => {
-                format!("Error: invalid slice")
+                write!(f, "Error: invalid slice")
             }
             EvalError::DivideByZero => {
-                format!("Error: divide by zero")
+                write!(f, "Error: divide by zero")
             }
             EvalError::InvalidKeywordArgument => {
-                format!("Error: invalid keyword argument")
+                write!(f, "Error: invalid keyword argument")
             }
             EvalError::NothingToUnpack => {
-                format!("Error: cannot unpack a non-tuple value")
+                write!(f, "Error: cannot unpack a non-tuple value")
             }
-            EvalError::InResolvedExpr(innererr, f) => {
-                format!("In resolved expression of {}\n{}", f, innererr.to_string())
+            EvalError::InResolvedExpr(innererr, func) => {
+                write!(f, "In resolved expression of {}\n{}", func, innererr)
             }
         }
     }

@@ -4,6 +4,7 @@
  */
 
 use std::fmt;
+use crate::ast::ExprA;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -19,6 +20,7 @@ pub type ParserResult<T> = std::result::Result<T, ParserError>;
 #[derive(Debug)]
 pub enum TypeError {
     ExpectedOne,
+    InferenceFailed(ExprA)
 }
 pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
 
@@ -58,7 +60,8 @@ impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Type checking error: ")?;
         match self {
-            Self::ExpectedOne => write!(f, "Expected a single type"),
+            Self::ExpectedOne => write!(f, "expected a single type"),
+            Self::InferenceFailed(expr) => write!(f, "type inference failed on expression {:?}", expr)
         }
     }
 }

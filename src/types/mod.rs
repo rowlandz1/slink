@@ -8,7 +8,7 @@ mod unifier;
 
 use std::collections::HashMap;
 use crate::ast::ExprA;
-use typechecker::Refinement;
+use crate::error::{TypeError, TypeCheckResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -30,6 +30,13 @@ pub struct TypeEnv {
     // and its position in the variable list at the time of being pushed.
     id_frames: Vec<HashMap<String, (usize, Type)>>,
 }
+
+/// A mapping from type variables to more specific types
+pub type Refinement = HashMap<String, Type>;
+
+/// A collection of refinements used to handle function overloading
+#[derive(Debug, Clone)]
+pub struct Refinements(Vec<Refinement>);
 
 impl Type {
     pub fn list(t: Type) -> Type { Type::List(Box::new(t)) }
@@ -138,12 +145,47 @@ impl TypeEnv {
 
     /// Front end for expression type checking. Returns possible types for the given expression.
     /// Type names are normalized.
-    pub fn get_expr_types(&mut self, expr: &ExprA) -> Vec<Type> {
+    pub fn get_expr_types(&mut self, expr: &ExprA) -> TypeCheckResult<Vec<Type>> {
         let mut i = 0;
         let typ = Type::TVar(fresh_type_var(&mut i));
-        let rs = self.typecheck_expr(expr, &typ, &mut i, vec![HashMap::new()]);
+        let rs = self.typecheck_expr(expr, &typ, &mut i, Refinements::new())?;
         
-        rs.into_iter().map(|r| typ.clone().refine(&r).normalize_type_var_names()).collect::<Vec<Type>>()
+        Ok(rs.into_iter().map(|r| typ.clone().refine(&r).normalize_type_var_names()).collect::<Vec<Type>>())
+    }
+}
+
+impl Refinements {
+    pub fn new() -> Refinements { Refinements(vec![HashMap::new()]) }
+    pub fn pure(r: Refinement) -> Refinements { Refinements(vec![r]) }
+    pub fn fail() -> Refinements { Refinements(Vec::new()) }
+
+    pub fn non_empty(self, expr: &ExprA) -> TypeCheckResult<Refinements> {
+        if self.0.len() == 0 {
+            Err(TypeError::InferenceFailed(expr.clone()))
+        } else { Ok(self) }
+    }
+
+    pub fn to_option(self) -> Option<Refinements> {
+        if self.0.len() == 0 { None } else { Some(self) }
+    }
+
+    /// Applies a function to each refinement. Successes (if any) are collected
+    /// and returned. Otherwise an InferenceFailed error on `expr` is returned.
+    pub fn traverse<F>(self, expr: &ExprA, f: F) -> TypeCheckResult<Refinements>
+    where F: FnMut(Refinement) -> Option<Refinements> {
+        self.into_iter().filter_map(f).flatten().collect::<Refinements>().non_empty(expr)
+    }
+}
+
+impl IntoIterator for Refinements {
+    type Item = Refinement;
+    type IntoIter = std::vec::IntoIter<Refinement>;
+    fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
+}
+
+impl std::iter::FromIterator<Refinement> for Refinements {
+    fn from_iter<I: IntoIterator<Item=Refinement>>(iter: I) -> Refinements {
+        Refinements(iter.into_iter().collect::<Vec<Refinement>>())
     }
 }
 

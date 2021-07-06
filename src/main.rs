@@ -50,7 +50,7 @@ fn main() {
 
                 match *ast.stmt {
                     ast::Stmt::Assign(_, _) => {
-                        match typenv.type_check_stmt(&ast) {
+                        match typenv.typecheck_stmt(&ast) {
                             Ok(_) => {}
                             Err(err) => eprintln!("{}", err.to_string()),
                         }
@@ -60,7 +60,7 @@ fn main() {
                         }
                     }
                     ast::Stmt::Display(_) => {
-                        let typ = match typenv.type_check_stmt(&ast) {
+                        let typ = match typenv.typecheck_stmt(&ast) {
                             Ok(typ) => typ,
                             Err(err) => { eprintln!("{}", err.to_string()); continue; }
                         };

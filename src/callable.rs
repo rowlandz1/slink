@@ -147,25 +147,28 @@ impl Callable {
     pub fn fun_comp(self, other: Callable) -> EvalResult<Callable> {
         match self {
             Closure { env, name, params, app, expr, next } => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                let next = match next {
+                    NoNext => Next(Box::new(other)),
+                    Next(next) => Next(Box::new(next.fun_comp(other)?)),
+                    NextUnpack(next) => NextUnpack(Box::new(next.fun_comp(other)?)),
                 };
-                Ok(Closure{env, name, params, app, expr, next: Next(Box::new(newnext))})
+                Ok(Closure{env, name, params, app, expr, next})
             }
             ListSlice(slice, next) => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                let next = match next {
+                    NoNext => Next(Box::new(other)),
+                    Next(next) => Next(Box::new(next.fun_comp(other)?)),
+                    NextUnpack(next) => NextUnpack(Box::new(next.fun_comp(other)?)),
                 };
-                Ok(ListSlice(slice, Next(Box::new(newnext))))
+                Ok(ListSlice(slice, next))
             }
             MatrixSlice(slice1, slice2, next) => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                let next = match next {
+                    NoNext => Next(Box::new(other)),
+                    Next(next) => Next(Box::new(next.fun_comp(other)?)),
+                    NextUnpack(next) => NextUnpack(Box::new(next.fun_comp(other)?)),
                 };
-                Ok(MatrixSlice(slice1, slice2, Next(Box::new(newnext))))
+                Ok(MatrixSlice(slice1, slice2, next))
             }
         }
     }
@@ -175,25 +178,28 @@ impl Callable {
     pub fn fun_comp_unpack(self, other: Callable) -> EvalResult<Callable> {
         match self {
             Closure { env, name, params, app, expr, next } => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                let next = match next {
+                    NoNext => NextUnpack(Box::new(other)),
+                    Next(next) => Next(Box::new(next.fun_comp_unpack(other)?)),
+                    NextUnpack(next) => NextUnpack(Box::new(next.fun_comp_unpack(other)?)),
                 };
-                Ok(Closure{env, name, params, app, expr, next: NextUnpack(Box::new(newnext))})
+                Ok(Closure{env, name, params, app, expr, next})
             }
             ListSlice(slice, next) => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                let next = match next {
+                    NoNext => NextUnpack(Box::new(other)),
+                    Next(next) => Next(Box::new(next.fun_comp_unpack(other)?)),
+                    NextUnpack(next) => NextUnpack(Box::new(next.fun_comp_unpack(other)?)),
                 };
-                Ok(ListSlice(slice, NextUnpack(Box::new(newnext))))
+                Ok(ListSlice(slice, next))
             }
             MatrixSlice(slice1, slice2, next) => {
-                let newnext = match next {
-                    NoNext => other,
-                    Next(next) | NextUnpack(next) => next.fun_comp(other)?,
+                let next = match next {
+                    NoNext => NextUnpack(Box::new(other)),
+                    Next(next) => Next(Box::new(next.fun_comp_unpack(other)?)),
+                    NextUnpack(next) => NextUnpack(Box::new(next.fun_comp_unpack(other)?)),
                 };
-                Ok(MatrixSlice(slice1, slice2, NextUnpack(Box::new(newnext))))
+                Ok(MatrixSlice(slice1, slice2, next))
             }
         }
     }

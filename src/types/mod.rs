@@ -159,12 +159,20 @@ impl Refinements {
     pub fn pure(r: Refinement) -> Refinements { Refinements(vec![r]) }
     pub fn fail() -> Refinements { Refinements(Vec::new()) }
 
-    pub fn non_empty(self, expr: &ExprA) -> TypeCheckResult<Refinements> {
+    /// Fails if the refinements vector is empty
+    pub fn expect_nonempty(self, expr: &ExprA) -> TypeCheckResult<Refinements> {
         if self.0.len() == 0 {
-            Err(TypeError::InferenceFailed(expr.clone()))
+            Err(TypeError::new(String::from("untypable expression"), expr))
         } else { Ok(self) }
     }
 
+    pub fn expect_type(self, expected_type: &Type, expr: &ExprA) -> TypeCheckResult<Refinements> {
+        if self.0.len() == 0 {
+            Err(TypeError::new(format!("expected type {}", expected_type.to_string()), expr))
+        } else { Ok(self) }
+    }
+
+    /// Returns `None` if the refinements vector is empty
     pub fn to_option(self) -> Option<Refinements> {
         if self.0.len() == 0 { None } else { Some(self) }
     }
@@ -173,7 +181,7 @@ impl Refinements {
     /// and returned. Otherwise an InferenceFailed error on `expr` is returned.
     pub fn traverse<F>(self, expr: &ExprA, f: F) -> TypeCheckResult<Refinements>
     where F: FnMut(Refinement) -> Option<Refinements> {
-        self.into_iter().filter_map(f).flatten().collect::<Refinements>().non_empty(expr)
+        self.into_iter().filter_map(f).flatten().collect::<Refinements>().expect_nonempty(expr)
     }
 }
 

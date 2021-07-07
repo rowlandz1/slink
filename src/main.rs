@@ -41,7 +41,7 @@ fn main() {
     loop {
         match rl.readline(">> ") {
             Ok(line) => {
-                rl.add_history_entry(line.as_str());
+                rl.add_history_entry(&line);
 
                 let ast = match parser::parse_stmt(&line) {
                     Ok(ast) => ast,
@@ -52,7 +52,7 @@ fn main() {
                     ast::Stmt::Assign(_, _) => {
                         match typenv.typecheck_stmt(&ast) {
                             Ok(_) => {}
-                            Err(err) => eprintln!("{}", err.to_string()),
+                            Err(err) => eprintln!("{}", err.supply_src(&line)),
                         }
                         match environ.execute(ast) {
                             Ok(_) => {}
@@ -62,7 +62,7 @@ fn main() {
                     ast::Stmt::Display(_) => {
                         let typ = match typenv.typecheck_stmt(&ast) {
                             Ok(typ) => typ,
-                            Err(err) => { eprintln!("{}", err.to_string()); continue; }
+                            Err(err) => { eprintln!("{}", err.supply_src(&line)); continue; }
                         };
                         match environ.execute(ast) {
                             Ok(output) => println!("{}: {}", output, typ),

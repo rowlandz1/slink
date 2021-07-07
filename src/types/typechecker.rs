@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use crate::ast::{Expr as E, ExprA, AstSlice, Stmt, StmtA};
 use crate::builtins::type_check_builtin;
-use crate::error::{TypeCheckResult, TypeError};
+use crate::error::TypeCheckResult;
 use super::{fresh_type_var, Refinements as RS, Type, TypeEnv};
 use super::unifier::{unify, unify_pairs};
 
@@ -17,7 +17,7 @@ impl TypeEnv {
         match &*stmt.stmt {
             Stmt::Assign(v, expr) => {
                 let mut types = self.get_expr_types(expr)?;
-                if types.len() != 1 { return Err(TypeError::ExpectedOne); }
+                if types.len() != 1 { panic!("at the disco"); }
                 self.var_types.insert(v.clone(), types.pop().unwrap());
                 Ok(String::from(""))
             }
@@ -54,7 +54,7 @@ impl TypeEnv {
                 self.push_new_frame(params.clone(), paramtypes);
                 let rs = self.typecheck_expr(body, &rettype, i, rs)?;
                 let paramtypes = self.pop_frame();
-                unify(&Type::Func(paramtypes, Box::new(rettype)), hint, rs).non_empty(expr)
+                unify(&Type::Func(paramtypes, Box::new(rettype)), hint, rs).expect_type(hint, expr)
             }
             E::FunApp(f, args) => {
                 // type check the function expression
@@ -76,11 +76,11 @@ impl TypeEnv {
                 // unification
                 let rettype = Type::TVar(fresh_type_var(i));
                 let rs = if unappliedargtypes.len() > 0 {
-                    unify(&Type::Func(unappliedargtypes, Box::new(rettype.clone())), hint, rs).non_empty(expr)?
+                    unify(&Type::Func(unappliedargtypes, Box::new(rettype.clone())), hint, rs)
                 } else {
-                    unify(&rettype, hint, rs).non_empty(expr)?
-                };
-                unify(&ftype, &Type::Func(argtypes, Box::new(rettype)), rs).non_empty(expr)
+                    unify(&rettype, hint, rs)
+                }.expect_type(hint, expr)?;
+                unify(&ftype, &Type::Func(argtypes, Box::new(rettype)), rs).expect_nonempty(expr)
             }
             E::FunKwApp(_f, _args) => todo!(),
             E::ListIdx(lexpr, slice) => {
@@ -141,8 +141,8 @@ impl TypeEnv {
 
                 // unification
                 let rettype = Type::TVar(fresh_type_var(i));
-                let rs = unify(&rettype, hint, rs).non_empty(expr)?;
-                unify(&Type::func2(lhstype, rhstype, rettype), &optype, rs).non_empty(expr)
+                let rs = unify(&rettype, hint, rs).expect_type(hint, expr)?;
+                unify(&Type::func2(lhstype, rhstype, rettype), &optype, rs).expect_nonempty(expr)
             }
             E::Unop(op, expr) => {
                 let optype = match op.as_str() {
@@ -155,15 +155,15 @@ impl TypeEnv {
                 let rs = self.typecheck_expr(expr, &exprtype, i, rs)?;
 
                 let rettype = Type::TVar(fresh_type_var(i));
-                let rs = unify(&rettype, hint, rs).non_empty(expr)?;
-                unify(&Type::func1(exprtype, rettype), &optype, rs).non_empty(expr)
+                let rs = unify(&rettype, hint, rs).expect_type(hint, expr)?;
+                unify(&Type::func1(exprtype, rettype), &optype, rs).expect_nonempty(expr)
             }
             E::List(l) => {
                 let innertype = Type::TVar(fresh_type_var(i));
                 for item in l {
                     rs = self.typecheck_expr(item, &innertype, i, rs)?;
                 }
-                unify(&Type::list(innertype), hint, rs).non_empty(expr)
+                unify(&Type::list(innertype), hint, rs).expect_type(hint, expr)
             },
             E::Tuple(l) => {
                 let mut ls: Vec<Type> = Vec::with_capacity(l.len());
@@ -172,23 +172,23 @@ impl TypeEnv {
                     rs = self.typecheck_expr(expr, &t, i, rs)?;
                     ls.push(t);
                 }
-                unify(&Type::Tuple(ls), hint, rs).non_empty(expr)
+                unify(&Type::Tuple(ls), hint, rs).expect_type(hint, expr)
             },
             E::Matrix(_, _, v) => {
                 for x in v {
                     rs = self.typecheck_expr(x, &Type::Num, i, rs)?;
                 }
-                unify(&Type::Mat, hint, rs).non_empty(expr)
+                unify(&Type::Mat, hint, rs).expect_type(hint, expr)
             },
-            E::Bool(_) => unify(&Type::Bool, hint, rs).non_empty(expr),
-            E::Str(_) => unify(&Type::Str, hint, rs).non_empty(expr),
-            E::Int(_) => unify(&Type::Num, hint, rs).non_empty(expr),
-            E::Num(_) => unify(&Type::Num, hint, rs).non_empty(expr),
-            E::IntImag(_) => unify(&Type::Num, hint, rs).non_empty(expr),
-            E::FloatImag(_) => unify(&Type::Num, hint, rs).non_empty(expr),
+            E::Bool(_) => unify(&Type::Bool, hint, rs).expect_type(hint, expr),
+            E::Str(_) => unify(&Type::Str, hint, rs).expect_type(hint, expr),
+            E::Int(_) => unify(&Type::Num, hint, rs).expect_type(hint, expr),
+            E::Num(_) => unify(&Type::Num, hint, rs).expect_type(hint, expr),
+            E::IntImag(_) => unify(&Type::Num, hint, rs).expect_type(hint, expr),
+            E::FloatImag(_) => unify(&Type::Num, hint, rs).expect_type(hint, expr),
             E::Id(x) if x.eq("_") => Ok(rs),
             E::Id(x) => {
-                if let Some(t) = self.get(x, i) { unify(&t, hint, rs).non_empty(expr) }
+                if let Some(t) = self.get(x, i) { unify(&t, hint, rs).expect_type(hint, expr) }
                 else { self.typecheck_builtin(expr, &x, hint, i, rs) }
             }
         }
@@ -197,7 +197,7 @@ impl TypeEnv {
     fn typecheck_builtin(&mut self, expr: &ExprA, name: &str, hint: &Type, i: &mut u32, rs: RS) -> TypeCheckResult<RS> {
         type_check_builtin(name).into_iter().filter_map(|typ| {
             unify(&typ.refresh_type_vars(i), hint, rs.clone()).to_option()
-        }).flatten().collect::<RS>().non_empty(expr)
+        }).flatten().collect::<RS>().expect_nonempty(expr)
     }
 
     fn typecheck_dot(&mut self, expr: &ExprA, lhs: &ExprA, rhs: &ExprA, hint: &Type, i: &mut u32, rs: RS) -> TypeCheckResult<RS> {

@@ -31,7 +31,8 @@ pub fn parse_type(text: String, tvars: &Vec<String>) -> ParserResult<Type> {
 }
 
 fn parse_stmt_pair(stmt: Pair<Rule>) -> ParserResult<StmtA> {
-    let (start, end) = (stmt.as_span().start(), stmt.as_span().end());
+    let start = stmt.as_span().start_pos().line_col();
+    let end = stmt.as_span().end_pos().line_col();
     let stmt = match stmt.as_rule() {
         Rule::stmt => {
             return parse_stmt_pair(stmt.into_inner().next().unwrap());
@@ -52,7 +53,8 @@ fn parse_stmt_pair(stmt: Pair<Rule>) -> ParserResult<StmtA> {
 }
 
 fn parse_expr_pair(expr: Pair<Rule>) -> ParserResult<ExprA> {
-    let (start, end) = (expr.as_span().start(), expr.as_span().end());
+    let start = expr.as_span().start_pos().line_col();
+    let end = expr.as_span().end_pos().line_col();
     let expr = match expr.as_rule() {
         Rule::expr |
         Rule::expr1 |
@@ -89,7 +91,8 @@ fn parse_expr_pair(expr: Pair<Rule>) -> ParserResult<ExprA> {
 
             loop {
                 if let Some(op) = inner_rules.next() {
-                    let (start, end) = (op.as_span().start(), op.as_span().end());
+                    let start = op.as_span().start_pos().line_col();
+                    let end = op.as_span().end_pos().line_col();
                     let op = op.as_str().to_string();
                     ret = ExprA{start, end, expr: Box::new(E::Unop(op, ret))};
                 } else { return Ok(ret); }
@@ -101,7 +104,7 @@ fn parse_expr_pair(expr: Pair<Rule>) -> ParserResult<ExprA> {
 
             loop {
                 if let Some(paren_operator) = inner_rules.next() {
-                    let (start, end) = (paren_operator.as_span().start(), paren_operator.as_span().end());
+                    let end = paren_operator.as_span().end_pos().line_col();
                     let mut paren_inner_rules = paren_operator.into_inner();
                     let inside = paren_inner_rules.next().unwrap();
                     let inner_expr = match inside.as_rule() {

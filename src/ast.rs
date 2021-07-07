@@ -9,8 +9,8 @@ use crate::types::Type;
 
 #[derive(Debug, Clone)]
 pub struct StmtA {
-    pub start: usize,
-    pub end: usize,
+    pub start: (usize, usize),  // (lineno from 1, col from 0)
+    pub end: (usize, usize),
     pub stmt: Box<Stmt>
 }
 
@@ -22,8 +22,8 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub struct ExprA {
-    pub start: usize,
-    pub end: usize,
+    pub start: (usize, usize),
+    pub end: (usize, usize),
     pub expr: Box<Expr>
 }
 

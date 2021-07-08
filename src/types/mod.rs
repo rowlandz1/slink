@@ -1,6 +1,16 @@
 /* types/mod.rs
  *
- * Defines types type environments
+ * Type inference is the process of determining the most general type (if one exists)
+ * of an expression given the types and organization of its subexpressions. Slink's type
+ * inference algorithm is based on the Hindley-Milner algorithm. However,
+ * since functions can be overloaded, values can be assigned a finite set of types instead
+ * of a single type (e.g. the `+` operator can operate on numbers, matrices, or other data
+ * types). Type inference succeeds at large if it succeeds for at least one combination of
+ * subexpression type variants.
+ * 
+ * Type variants are handled by the `Refinements` structure which can maintain many distinct
+ * sets of bindings for type variables. Each set of bindings is called a `Refinement` and
+ * represents what a typical Hindley-Milner unification algorithm would produce.
  */
 
 mod typechecker;
@@ -29,6 +39,10 @@ pub struct TypeEnv {
     // A stack of frames. Each frame maps a variable name to a type assumption
     // and its position in the variable list at the time of being pushed.
     id_frames: Vec<HashMap<String, (usize, Type)>>,
+    // possible refinements for the types in var_types and id_frames
+    rs: Refinements,
+    // for generating new type variables
+    i: u32,
 }
 
 /// A mapping from type variables to more specific types
@@ -105,7 +119,7 @@ impl Type {
 
 impl TypeEnv {
     pub fn new() -> TypeEnv {
-        TypeEnv{var_types: HashMap::new(), id_frames: Vec::new()}
+        TypeEnv{var_types: HashMap::new(), id_frames: Vec::new(), rs: Refinements::new(), i: 0}
     }
 
     /// Introduces fresh type variables for each id and adds them to
@@ -135,22 +149,12 @@ impl TypeEnv {
     }
 
     /// Lookup the assumed type for the given id.
-    pub fn get(&self, id: &String, i: &mut u32) -> Option<Type> {
+    pub fn get(&mut self, id: &String) -> Option<Type> {
         for frame in self.id_frames.iter().rev() {
             if let Some((_, typ)) = frame.get(id) { return Some(typ.clone()); }
         }
-        if let Some(typ) = self.var_types.get(id) { return Some(typ.clone().refresh_type_vars(i)); }
+        if let Some(typ) = self.var_types.get(id) { return Some(typ.clone()); }
         None
-    }
-
-    /// Front end for expression type checking. Returns possible types for the given expression.
-    /// Type names are normalized.
-    pub fn get_expr_types(&mut self, expr: &ExprA) -> TypeCheckResult<Vec<Type>> {
-        let mut i = 0;
-        let typ = Type::TVar(fresh_type_var(&mut i));
-        let rs = self.typecheck_expr(expr, &typ, &mut i, Refinements::new())?;
-        
-        Ok(rs.into_iter().map(|r| typ.clone().refine(&r).normalize_type_var_names()).collect::<Vec<Type>>())
     }
 }
 
@@ -197,7 +201,7 @@ impl std::iter::FromIterator<Refinement> for Refinements {
     }
 }
 
-/// Returns a fresh type variable.
+/// Repeat code. Eliminate?
 pub fn fresh_type_var(i: &mut u32) -> String {
     let num_primes = (*i / 26) as usize;
     let letter = char::from_u32((*i % 26) + 0x41).unwrap();

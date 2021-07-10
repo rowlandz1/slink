@@ -16,6 +16,13 @@ use crate::types::Type;
 #[grammar = "grammar.pest"]
 struct SlinkParser;
 
+pub fn parse_program(text: &String) -> ParserResult<Vec<StmtA>> {
+    match SlinkParser::parse(Rule::prog, text) {
+        Ok(mut pairs) => pairs.next().unwrap().into_inner().map(parse_stmt_pair).collect(),
+        Err(err) => Err(ParserError::PestError(err))
+    }
+}
+
 pub fn parse_stmt(text: &String) -> ParserResult<StmtA> {
     match SlinkParser::parse(Rule::stmt, text) {
         Ok(mut pairs) => parse_stmt_pair(pairs.next().unwrap()),

@@ -12,28 +12,28 @@ use super::unifier::{unify, unify_pairs};
 
 impl TypeEnv {
     /// Type checks expressions within a statement. If the statement is a display,
-    /// the type in string form is returned.
-    pub fn typecheck_stmt(&mut self, stmt: &StmtA) -> TypeCheckResult<String> {
+    /// the type(s) in string form are returned to be displayed to the user.
+    pub fn typecheck_stmt(&mut self, stmt: &StmtA) -> TypeCheckResult<Vec<String>> {
         match &*stmt.stmt {
             Stmt::Assign(v, expr) => {
-                let rs = self.rs.clone();   // NOT IDEAL
+                self.i = 0;
                 let vtype = Type::TVar(self.fresh_type_var());
-                let rs = self.typecheck_expr(expr, &vtype, rs)?;
-                self.rs = rs;
-                self.var_types.insert(v.clone(), vtype);
-                Ok(String::from(""))
+                let rs = self.typecheck_expr(expr, &vtype, RS::new())?;
+                let vtypes = rs.into_iter().map(|r| vtype.clone().refine(&r)).collect::<Vec<Type>>();
+                self.var_types.insert(v.clone(), vtypes);
+                Ok(vec![])
             }
             Stmt::Display(expr) => {
                 let typ = Type::TVar(self.fresh_type_var());
-                let rs = self.typecheck_expr(expr, &typ, self.rs.clone())?;
-                Ok(rs.into_iter().map(|r| typ.clone().refine(&r).normalize_type_var_names().to_string()).collect::<Vec<String>>().join("\n"))
+                let rs = self.typecheck_expr(expr, &typ, RS::new())?;
+                Ok(rs.into_iter().map(|r| typ.clone().refine(&r).normalize_type_var_names().to_string()).collect())
             }
         }
     }
 
     /// Main type checking function for expressions. Binds `hint` to the type of `expr` by
-    /// modifying the refinements `rs`. The `i` is used to generate new type variables.
-    pub fn typecheck_expr(&mut self, expr: &ExprA, hint: &Type, mut rs: RS) -> TypeCheckResult<RS> {
+    /// modifying the refinements `rs`.
+    fn typecheck_expr(&mut self, expr: &ExprA, hint: &Type, mut rs: RS) -> TypeCheckResult<RS> {
         match &*expr.expr {
             E::Lambda(params, body, typeparams, paramtypes, rettype) => {
                 // replace type parameters with fresh type variables
@@ -133,7 +133,10 @@ impl TypeEnv {
             E::Binop(op, lhs, rhs) => {
                 // type check operator
                 let optype = Type::TVar(self.fresh_type_var());
-                let rs = self.typecheck_builtin(expr, &format!("op{}", op), &optype, rs)?;
+                //let rs = self.typecheck_builtin(expr, &format!("op{}", op), &optype, rs)?;
+                let rs = type_check_builtin(&format!("op{}", op)).into_iter().filter_map(|typ| {
+                    unify(&typ.refresh_type_vars(&mut self.i), &optype, rs.clone()).to_option()
+                }).flatten().collect::<RS>().expect_nonempty(expr)?;
 
                 // type check operands
                 let lhstype = Type::TVar(self.fresh_type_var());
@@ -189,17 +192,18 @@ impl TypeEnv {
             E::IntImag(_) => unify(&Type::Num, hint, rs).expect_type(hint, expr),
             E::FloatImag(_) => unify(&Type::Num, hint, rs).expect_type(hint, expr),
             E::Id(x) if x.eq("_") => Ok(rs),
-            E::Id(x) => {
-                if let Some(t) = self.get(x) { unify(&t, hint, rs).expect_type(hint, expr) }
-                else { self.typecheck_builtin(expr, &x, hint, rs) }
+            E::Id(x) => if let Some(typ) = self.local_var_lookup(x) { unify(&typ, hint, rs).expect_type(hint, expr) }
+            else if let Some(types) = self.global_var_lookup(x) {
+                types.into_iter().filter_map(|typ| {
+                    unify(&typ.refresh_type_vars(&mut self.i), hint, rs.clone()).to_option()
+                }).flatten().collect::<RS>().expect_nonempty(expr)
+            }
+            else {
+                type_check_builtin(x).into_iter().filter_map(|typ| {
+                    unify(&typ.refresh_type_vars(&mut self.i), hint, rs.clone()).to_option()
+                }).flatten().collect::<RS>().expect_nonempty(expr)
             }
         }
-    }
-
-    fn typecheck_builtin(&mut self, expr: &ExprA, name: &str, hint: &Type, rs: RS) -> TypeCheckResult<RS> {
-        type_check_builtin(name).into_iter().filter_map(|typ| {
-            unify(&typ.refresh_type_vars(&mut self.i), hint, rs.clone()).to_option()
-        }).flatten().collect::<RS>().expect_nonempty(expr)
     }
 
     fn typecheck_dot(&mut self, expr: &ExprA, lhs: &ExprA, rhs: &ExprA, hint: &Type, rs: RS) -> TypeCheckResult<RS> {

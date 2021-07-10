@@ -1,12 +1,12 @@
 mod ast;
 mod builtins;
 mod callable;
+mod display;
 mod error;
 mod exec;
 mod matrix;
 mod number;
 mod parser;
-mod print;
 mod replhelper;
 mod types;
 mod value;
@@ -18,17 +18,19 @@ extern crate rustyline;
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use std::env;
+use std::{env, fs};
 
 fn main() {
-
-    // command line arguments
     let command_line_args: Vec<String> = env::args().collect();
     if command_line_args.len() == 2 {
         interpret_file(&command_line_args[1]);
-        return;
+    } else {
+        repl();
     }
+}
 
+/// Read-evaluate-print-loop
+fn repl() {
     let mut environ = exec::Environ::new();
     let mut typenv = types::TypeEnv::new();
 
@@ -40,74 +42,61 @@ fn main() {
     // REPL
     loop {
         match rl.readline(">> ") {
-            Ok(line) => {
-                rl.add_history_entry(&line);
+            Ok(src) => {
+                rl.add_history_entry(&src);
 
-                let ast = match parser::parse_stmt(&line) {
+                let ast = match parser::parse_stmt(&src) {
                     Ok(ast) => ast,
                     Err(err) => { eprintln!("{:?}", err); continue; }
                 };
 
-                match *ast.stmt {
-                    ast::Stmt::Assign(_, _) => {
-                        match typenv.typecheck_stmt(&ast) {
-                            Ok(_) => {}
-                            Err(err) => eprintln!("{}", err.supply_src(&line)),
-                        }
-                        match environ.execute(ast) {
-                            Ok(_) => {}
-                            Err(err) => eprintln!("{}", err.to_string()),
-                        }
-                    }
-                    ast::Stmt::Display(_) => {
-                        let typ = match typenv.typecheck_stmt(&ast) {
-                            Ok(typ) => typ,
-                            Err(err) => { eprintln!("{}", err.supply_src(&line)); continue; }
-                        };
-                        match environ.execute(ast) {
-                            Ok(output) => println!("{}: {}", output, typ),
-                        //    Ok(output) => println!("{}", output),
-                            Err(err) => eprintln!("{}", err.to_string())
-                        }
+                let types = match typenv.typecheck_stmt(&ast) {
+                    Ok(types) => types,
+                    Err(err) => { eprintln!("{}", err.supply_src(&src)); continue; }
+                };
+
+                let output = match environ.execute(ast) {
+                    Ok(output) => output,
+                    Err(err) => { eprintln!("{}", err); continue; }
+                };
+
+                if let Some(output) = output {
+                    if types.len() == 1 {
+                        println!("{}: {}", output, types[0]);
+                    } else {
+                        println!("{}:\n    {}", output, types.join("\n    "));
                     }
                 }
             },
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break
-            },
-            Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
-                break
-            },
-            Err(err) => {
-                println!("Error: {:?}", err);
-                break
-            }
+            Err(ReadlineError::Interrupted) |
+            Err(ReadlineError::Eof) => break,
+            Err(err) => { eprintln!("Readline error: {:?}", err); break; }
         }
     }
     rl.save_history("history.txt").unwrap();
 }
 
-fn interpret_file(_srcfile: &str) {
-    todo!()
-    // let mut environ = exec::Environ::new();
-    // let mut srcfile = fs::File::open(srcfile)
-    //     .expect("Cannot open requested file");
-    // let mut contents = String::new();
-    // srcfile.read_to_string(&mut contents).unwrap();
-    // let mut prog = SciLangParser::parse(Rule::prog, &mut contents)
-    //     .expect("unsuccessful parse");
+fn interpret_file(srcfile: &str) {
+    let contents = String::from_utf8_lossy(&fs::read(srcfile).expect("Couldn't read file")).to_string();
+    let program = match parser::parse_program(&contents) {
+        Ok(stmts) => stmts,
+        Err(err) => { eprintln!("{}", err); return; }
+    };
 
-    // let mut inner_rules = prog.next().unwrap().into_inner();
-    // loop {
-    //     if let Some(stmt) = inner_rules.next() {
-    //         let ast = parser::parse_stmt(stmt);
-    //         //println!("DEBUG: AST: {:?}", ast);
-    //         match environ.execute(ast) {
-    //             Ok(output) => println!("{}", output),
-    //             Err(err) => { eprintln!("{}", err); break; }
-    //         }
-    //     } else { break; }
-    // }
+    let mut typenv = types::TypeEnv::new();
+    for stmt in &program {
+        match typenv.typecheck_stmt(stmt) {
+            Ok(_) => {}
+            Err(err) => { eprintln!("{}", err.supply_src(&contents)); return; }
+        }
+    }
+
+    let mut environ = exec::Environ::new();
+    for stmt in program {
+        match environ.execute(stmt) {
+            Ok(Some(output)) => println!("{}", output),
+            Ok(None) => {}
+            Err(err) => { println!("{}", err); return; }
+        }
+    }
 }

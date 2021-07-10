@@ -28,22 +28,22 @@ impl Environ {
     }
 
     /// Executes a statement and returns the output.
-    pub fn execute(&mut self, stmt: StmtA) -> Result<String, String> {
+    pub fn execute(&mut self, stmt: StmtA) -> Result<Option<String>, String> {
         match *stmt.stmt {
             Stmt::Assign(v, e) => {
                 match self.evaluate(e) {
                     Ok(V::Callable(Closure{env, params, app, expr, next, ..})) => {
                         let name = Some(v.clone());
                         self.var_store.insert(v, V::Callable(Closure{env, name, params, app, expr, next}));
-                        Ok(String::from(""))
+                        Ok(None)
                     }
-                    Ok(evaled) => { self.var_store.insert(v, evaled); Ok(String::from("")) }
+                    Ok(evaled) => { self.var_store.insert(v, evaled); Ok(None) }
                     Err(e) => Err(e.to_string()),
                 }
             }
             Stmt::Display(e) => {
                 match self.evaluate(e) {
-                    Ok(evaled) => Ok(evaled.to_string()),
+                    Ok(evaled) => Ok(Some(evaled.to_string())),
                     Err(err) => Err(err.to_string())
                 }
             }

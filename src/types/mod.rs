@@ -35,12 +35,10 @@ pub enum Type {
 
 pub struct TypeEnv {
     // Mapping from global ids to the type of the expressions to which they resolve
-    var_types: HashMap<String, Type>,
+    var_types: HashMap<String, Vec<Type>>,
     // A stack of frames. Each frame maps a variable name to a type assumption
     // and its position in the variable list at the time of being pushed.
     id_frames: Vec<HashMap<String, (usize, Type)>>,
-    // possible refinements for the types in var_types and id_frames
-    rs: Refinements,
     // for generating new type variables
     i: u32,
 }
@@ -119,7 +117,7 @@ impl Type {
 
 impl TypeEnv {
     pub fn new() -> TypeEnv {
-        TypeEnv{var_types: HashMap::new(), id_frames: Vec::new(), rs: Refinements::new(), i: 0}
+        TypeEnv{var_types: HashMap::new(), id_frames: Vec::new(), i: 0}
     }
 
     /// Introduces fresh type variables for each id and adds them to
@@ -148,13 +146,15 @@ impl TypeEnv {
         ret.into_iter().map(|(_, t)| t).collect()
     }
 
-    /// Lookup the assumed type for the given id.
-    pub fn get(&mut self, id: &String) -> Option<Type> {
+    fn local_var_lookup(&mut self, id: &String) -> Option<Type> {
         for frame in self.id_frames.iter().rev() {
             if let Some((_, typ)) = frame.get(id) { return Some(typ.clone()); }
         }
-        if let Some(typ) = self.var_types.get(id) { return Some(typ.clone()); }
         None
+    }
+
+    pub fn global_var_lookup(&self, id: &String) -> Option<Vec<Type>> {
+        self.var_types.get(id).map(Vec::clone)
     }
 }
 

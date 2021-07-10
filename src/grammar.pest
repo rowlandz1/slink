@@ -21,8 +21,8 @@ BINOP7    = @{ "." | "$" }
 prog = { stmt* }
 
 stmt = {
-    WHITESPACE* ~ stmt_assign
-  | WHITESPACE* ~ expr ~ ";"
+    WHITESPACE* ~ stmt_assign ~ WHITESPACE*
+  | WHITESPACE* ~ expr ~ ";" ~ WHITESPACE*
 }
 stmt_assign = { ID ~ "=" ~ expr ~ ";" }
 

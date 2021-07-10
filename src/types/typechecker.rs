@@ -14,9 +14,9 @@ impl TypeEnv {
     /// Type checks expressions within a statement. If the statement is a display,
     /// the type(s) in string form are returned to be displayed to the user.
     pub fn typecheck_stmt(&mut self, stmt: &StmtA) -> TypeCheckResult<Vec<String>> {
+        self.i = 0;
         match &*stmt.stmt {
             Stmt::Assign(v, expr) => {
-                self.i = 0;
                 let vtype = Type::TVar(self.fresh_type_var());
                 let rs = self.typecheck_expr(expr, &vtype, RS::new())?;
                 let vtypes = rs.into_iter().map(|r| vtype.clone().refine(&r)).collect::<Vec<Type>>();
@@ -39,8 +39,8 @@ impl TypeEnv {
                 // replace type parameters with fresh type variables
                 let mut hm: HashMap<String, Type> = HashMap::new();
                 typeparams.iter().map(|t| hm.insert(t.clone(), Type::TVar(self.fresh_type_var()))).for_each(drop);
-                let paramtypes = paramtypes.iter().map(|t| t.clone().refine(&hm));
-                let rettype = rettype.clone().refine(&hm);
+                let paramtypes = paramtypes.iter().map(|t| t.clone().refine_once(&hm));
+                let rettype = rettype.clone().refine_once(&hm);
 
                 // replace `Any` types (from underscores) with new type variables
                 let paramtypes = paramtypes.into_iter().map(|t| match t {

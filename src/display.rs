@@ -39,7 +39,7 @@ impl fmt::Display for Callable {
         match self {
             Callable::Closure{params, app, ..} => {
                 write!(f, "lam ({}", params.join(", "))?;
-                for (key, val) in app { write!(f, " {}={}", key, val)?; }
+                for (key, val) in app { write!(f, ", {}={}", key, val)?; }
                 write!(f, ") => *")
             }
             Callable::ListSlice(..) => write!(f, "<slice>"),

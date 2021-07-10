@@ -29,7 +29,7 @@ pub fn type_check_builtin(name: &str) -> Vec<T> {
         "num"       => ts!["(Str) -> Num"],
         "op+"       => ts!["(Num, Num) -> Num", "(Str, Str) -> Str", "(Mat, Mat) -> Mat",
                            "(Num, Mat) -> Mat", "(Mat, Num) -> Mat", "(List<A>, List<A>) -> List<A>"],
-        "op-"       => ts!["(Num, Num) -> Num", "(Mat, Mat) -> Mat"],
+        "op-"       => ts!["(Num, Num) -> Num", "(Mat, Mat) -> Mat", "(Num, Mat) -> Mat", "(Mat, Num) -> Mat"],
         "op*"       => ts!["(Num, Num) -> Num", "(Mat, Mat) -> Mat", "(Mat, Num) -> Mat",
                            "(Num, Mat) -> Mat", "(Str, Num) -> Str", "(List<A>, Num) -> List<A>"],
         "op/"       => ts!["(Num, Num) -> Num", "(Num, Mat) -> Mat", "(Mat, Num) -> Mat", "(Mat, Mat) -> Mat"],

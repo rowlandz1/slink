@@ -56,7 +56,7 @@ impl Type {
     pub fn func1(arg: Type, ret: Type) -> Type { Type::Func(vec![arg], Box::new(ret)) }
     pub fn func2(arg1: Type, arg2: Type, ret: Type) -> Type { Type::Func(vec![arg1, arg2], Box::new(ret)) }
 
-    /// Resolves all bound type variables in the given type. Doesn't check for circular bindings.
+    /// Recursively resolves all bound type variables in the given type. Doesn't check for circular bindings.
     pub fn refine(self, r: &Refinement) -> Type {
         match self {
             Type::TVar(v) => if let Some(t) = r.get(&v) {
@@ -67,6 +67,22 @@ impl Type {
             Type::Func(args, ret) => Type::Func(
                 args.into_iter().map(|t| t.refine(r)).collect(),
                 Box::new(ret.refine(r))
+            ),
+            t => t
+        }
+    }
+
+    /// Applies the refinement non-recursively for simple renaming
+    pub fn refine_once(self, r: &Refinement) -> Type {
+        match self {
+            Type::TVar(v) => if let Some(t) = r.get(&v) {
+                t.clone()
+            } else { Type::TVar(v) }
+            Type::List(t) => Type::list(t.refine_once(r)),
+            Type::Tuple(ts) => Type::Tuple(ts.into_iter().map(|t| t.refine_once(r)).collect()),
+            Type::Func(args, ret) => Type::Func(
+                args.into_iter().map(|t| t.refine_once(r)).collect(),
+                Box::new(ret.refine_once(r))
             ),
             t => t
         }

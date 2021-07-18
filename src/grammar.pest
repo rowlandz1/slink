@@ -2,9 +2,10 @@ alpha = _{ 'a'..'z' | 'A'..'Z' }
 digit = _{ '0'..'9' }
 rangetoken = _{ ":" }
 WHITESPACE = _{ " " | "\t" | "\n" }
+COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 
 ID        = @{ alpha ~ (alpha | digit)* | "_" }
-OPID      = @{ "op" ~ ("+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<=" | ">=" | "<" | ">" ) }
+OPID      = @{ "op" ~ ("+" | "-" | "**" | "*" | "/" | "%" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "&&" | "||") }
 INT       = @{ digit+ }
 FLOAT     = @{ digit+ ~ "." ~ digit+ }
 INTIMAG   = @{ digit+ ~ "i" }
@@ -22,9 +23,15 @@ prog = { stmt* }
 
 stmt = {
     WHITESPACE* ~ stmt_assign ~ WHITESPACE*
-  | WHITESPACE* ~ expr ~ ";" ~ WHITESPACE*
+  | WHITESPACE* ~ stmt_fundecl ~ WHITESPACE*
+  | WHITESPACE* ~ stmt_print ~ WHITESPACE*
 }
-stmt_assign = { ID ~ "=" ~ expr ~ ";" }
+KW_LET = @{ "let" ~ (WHITESPACE | COMMENT) }
+stmt_assign = { KW_LET ~ ID ~ "=" ~ expr ~ ";" }
+KW_FUN = @{ "fun" ~ (WHITESPACE | COMMENT) }
+stmt_fundecl = { KW_FUN ~ ID ~ type_param_list ~ param_list ~ ret_type ~ "=" ~ expr ~ ";" }
+KW_PRINT = @{ "print" ~ (WHITESPACE | COMMENT) }
+stmt_print = { KW_PRINT ~ expr ~ ";" }
 
 /***** Expressions *****/
 
@@ -40,11 +47,12 @@ expr8 = { expr9 ~ paren_operator* }
 expr9 = { expr_base }
 
 expr_base = {
-    matrix
+    block
+  | matrix
   | list
   | lam_expr
   | tuple
-  | "(" ~ expr ~ ")"
+  | parens_expr
   | bool
   | string
   | lam_basic
@@ -55,6 +63,8 @@ expr_base = {
   | OPID
   | ID
 }
+
+block = { "{" ~ stmt* ~ expr ~ "}" }
 
 matrix = { mat_row+ }
 mat_row = { "{" ~ expr ~ (","? ~ expr)* ~ ","? ~ "}" }
@@ -75,11 +85,13 @@ tuple = {
   | "(" ~ expr ~ ("," ~ expr)+ ~ ","? ~ ")"
 }
 
+parens_expr = { "(" ~ expr ~ ")" }
+
 bool = { "true" | "false" }
 
 string = @{
     "'" ~ ("\\'" | (!"'" ~ ANY))* ~ "'"
-  | "\"" ~ ("\\\"" | (!"\"" ~ ANY)* ~ "\"")
+  | "\"" ~ ("\\\"" | (!"\"" ~ ANY))* ~ "\""
 }
 
 paren_operator = {

@@ -8,7 +8,7 @@
 use pest::Parser;
 use pest::iterators::Pair;
 use std::collections::HashMap;
-use crate::ast::{Expr as E, ExprA, Stmt, StmtA, AstSlice};
+use crate::ast::{Expr as E, ExprA, Stmt, StmtA, AstSlice, Lambda};
 use crate::error::{ParserError, ParserResult};
 use crate::types::Type;
 
@@ -46,13 +46,29 @@ fn parse_stmt_pair(stmt: Pair<Rule>) -> ParserResult<StmtA> {
         }
         Rule::stmt_assign => {
             let mut inner_rules = stmt.into_inner();
+            inner_rules.next();
             let id = inner_rules.next().unwrap().as_str().to_string();
             let expr = parse_expr_pair(inner_rules.next().unwrap())?;
             Stmt::Assign(id, expr)
         }
-        Rule::expr => {
-            let expr = parse_expr_pair(stmt)?;
-            Stmt::Display(expr)
+        Rule::stmt_fundecl => {
+            let mut inner_rules = stmt.into_inner();
+            inner_rules.next();
+            let name = inner_rules.next().unwrap().as_str().to_string();
+            let typeparams = parse_type_param_list(inner_rules.next().unwrap())?;
+            let (params, paramtypes) = parse_param_list(inner_rules.next().unwrap(), &typeparams)?;
+            let rettype = match inner_rules.next().unwrap().into_inner().next() {
+                Some(t) => parse_type_pair(t, &typeparams)?,
+                None => Type::Any,
+            };
+            let body = parse_expr_pair(inner_rules.next().unwrap())?;
+            Stmt::FunDecl(name, Lambda{params, body, typeparams, paramtypes, rettype})
+        }
+        Rule::stmt_print => {
+            let mut inner_rules = stmt.into_inner();
+            inner_rules.next();
+            let expr = parse_expr_pair(inner_rules.next().unwrap())?;
+            Stmt::Print(expr)
         }
         _ => unreachable!()
     };
@@ -133,7 +149,20 @@ fn parse_expr_pair(expr: Pair<Rule>) -> ParserResult<ExprA> {
             }
         }
         Rule::expr9 |
-        Rule ::expr_base => return parse_expr_pair(expr.into_inner().next().unwrap()),
+        Rule::expr_base => return parse_expr_pair(expr.into_inner().next().unwrap()),
+        Rule::parens_expr => *parse_expr_pair(expr.into_inner().next().unwrap())?.expr,
+        Rule::block => {
+            let mut inner_rules = expr.into_inner();
+            let mut stmts = Vec::new();
+            loop {
+                let blockline = inner_rules.next().unwrap();
+                match blockline.as_rule() {
+                    Rule::stmt => stmts.push(parse_stmt_pair(blockline)?),
+                    Rule::expr => break E::Block(stmts, parse_expr_pair(blockline)?),
+                    _ => unreachable!()
+                }
+            }
+        }
         Rule::matrix => {
             let mut inner_rules = expr.into_inner();
             let mut mat_data = inner_rules.next().unwrap().into_inner().map(parse_expr_pair).collect::<ParserResult<Vec<ExprA>>>()?;
@@ -152,20 +181,20 @@ fn parse_expr_pair(expr: Pair<Rule>) -> ParserResult<ExprA> {
         Rule::list => E::List(expr.into_inner().map(parse_expr_pair).collect::<ParserResult<Vec<ExprA>>>()?),
         Rule::lam_expr => {
             let mut inner_rules = expr.into_inner();
-            let type_param_list = parse_type_param_list(inner_rules.next().unwrap())?;
-            let (params, paramtypes) = parse_param_list(inner_rules.next().unwrap(), &type_param_list)?;
-            let ret_type = match inner_rules.next().unwrap().into_inner().next() {
-                Some(t) => parse_type_pair(t, &type_param_list)?,
+            let typeparams = parse_type_param_list(inner_rules.next().unwrap())?;
+            let (params, paramtypes) = parse_param_list(inner_rules.next().unwrap(), &typeparams)?;
+            let rettype = match inner_rules.next().unwrap().into_inner().next() {
+                Some(t) => parse_type_pair(t, &typeparams)?,
                 None => Type::Any,
             };
-            let inner_expr = parse_expr_pair(inner_rules.next().unwrap())?;
-            E::Lambda(params, inner_expr, type_param_list, paramtypes, ret_type)
+            let body = parse_expr_pair(inner_rules.next().unwrap())?;
+            E::Lambda(Lambda{params, body, typeparams, paramtypes, rettype})
         }
         Rule::lam_basic => {
             let mut inner_rules = expr.into_inner();
             let id = inner_rules.next().unwrap().as_str().to_string();
             let body = parse_expr_pair(inner_rules.next().unwrap())?;
-            E::Lambda(vec![id], body, Vec::new(), vec![Type::Any], Type::Any)
+            E::Lambda(Lambda{params: vec![id], body, typeparams: Vec::new(), paramtypes: vec![Type::Any], rettype: Type::Any})
         }
         Rule::tuple => E::Tuple(expr.into_inner().map(|x| parse_expr_pair(x)).collect::<ParserResult<Vec<ExprA>>>()?),
         Rule::bool => E::Bool(expr.as_str().eq("true")),

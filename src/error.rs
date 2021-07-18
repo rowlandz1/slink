@@ -4,7 +4,6 @@
  */
 
 use std::fmt;
-use crate::ast::ExprA;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -20,12 +19,13 @@ pub type ParserResult<T> = std::result::Result<T, ParserError>;
 #[derive(Debug)]
 pub struct TypeError {
     msg: String,
-    start: (usize, usize),
-    end: (usize, usize),
+    start: Option<(usize, usize)>,
+    end: Option<(usize, usize)>,
     firstline: usize,
     lines: Vec<String>
 }
 pub type TypeCheckResult<T> = std::result::Result<T, TypeError>;
+
 
 #[derive(Debug)]
 pub enum EvalError {
@@ -60,16 +60,25 @@ impl fmt::Display for ParserError {
 }
 
 impl TypeError {
-    pub fn new(msg: String, expr: &ExprA) -> TypeError {
-        TypeError{msg, start: expr.start, end: expr.end, firstline: 0, lines: Vec::new()}
+    pub fn new(msg: String) -> TypeError {
+        TypeError{msg, start: None, end: None, firstline: 0, lines: Vec::new()}
+    }
+
+    /// Sets `start` and `end` to the given values if previously unset.
+    pub fn provide_span(mut self, start: (usize, usize), end: (usize,usize)) -> TypeError {
+        if self.start.is_none() && self.end.is_none() {
+            self.start = Some(start); self.end = Some(end);
+        }
+        self 
     }
 
     /// Fills in the `lines` and `firstline` fields based on the provided code source
     pub fn supply_src(mut self, src: &str) -> TypeError {
-        let numlines = self.end.0 - self.start.0 + 1;
+        let (start, end) = (self.start.unwrap(), self.end.unwrap());
+        let numlines = end.0 - start.0 + 1;
         assert!(numlines > 0);
-        let lines: Vec<String> = src.lines().skip(self.start.0 - 1).take(numlines).map(String::from).collect();
-        self.firstline = self.start.0;
+        let lines: Vec<String> = src.lines().skip(start.0 - 1).take(numlines).map(String::from).collect();
+        self.firstline = start.0;
         self.lines = lines;
         self
     }
@@ -77,28 +86,29 @@ impl TypeError {
 
 impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (start, end) = (self.start.unwrap(), self.end.unwrap());
         write!(f, "\x1B[1;31mType checking error\x1b[m: {}\n\n", self.msg)?;
-        if self.start.0 == self.end.0 {
+        if self.start.unwrap().0 == self.end.unwrap().0 {
             let line = &self.lines[0];
-            let a = &line[..self.start.1-1];
-            let b = &line[self.start.1-1..self.end.1-1];
-            let c = &line[self.end.1-1..];
+            let a = &line[..start.1-1];
+            let b = &line[start.1-1..end.1-1];
+            let c = &line[end.1-1..];
             writeln!(f, "{:4} | {}\x1B[1;94m{}\x1B[m{}", self.firstline, a, b, c)?;
             writeln!(f, "     | {}\x1B[1;94m{}\x1B[m", " ".repeat(a.len()), "~".repeat(b.len()))?;
         } else {
-            writeln!(f, "     |{}v", " ".repeat(self.start.1))?;
+            writeln!(f, "     |{}v", " ".repeat(start.1))?;
             let mut currentline = self.firstline;
             for line in &self.lines {
-                if currentline == self.start.0 {
-                    writeln!(f, "{:4} | {}\x1B[1;94m{}\x1B[m", currentline, &line[..self.start.1-1], &line[self.start.1-1..])?;
-                } else if currentline == self.end.0 {
-                    writeln!(f, "{:4} | \x1B[1;94m{}\x1B[m{}", currentline, &line[..self.end.1-1], &line[self.end.1-1..])?;
+                if currentline == start.0 {
+                    writeln!(f, "{:4} | {}\x1B[1;94m{}\x1B[m", currentline, &line[..start.1-1], &line[start.1-1..])?;
+                } else if currentline == end.0 {
+                    writeln!(f, "{:4} | \x1B[1;94m{}\x1B[m{}", currentline, &line[..end.1-1], &line[end.1-1..])?;
                 } else {
                     writeln!(f, "{:4} | \x1B[1;94m{}\x1B[m", currentline, line)?;
                 }
                 currentline += 1;
             }
-            writeln!(f, "     |{}^", " ".repeat(self.end.1))?;
+            writeln!(f, "     |{}^", " ".repeat(end.1))?;
         }
         Ok(())
     }

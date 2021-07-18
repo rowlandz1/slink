@@ -17,7 +17,6 @@ mod typechecker;
 mod unifier;
 
 use std::collections::HashMap;
-use crate::ast::ExprA;
 use crate::error::{TypeError, TypeCheckResult};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,11 +33,11 @@ pub enum Type {
 }
 
 pub struct TypeEnv {
-    // Mapping from global ids to the type of the expressions to which they resolve
-    var_types: HashMap<String, Vec<Type>>,
+    // Mapping from ids to the type of the expressions to which they resolve
+    var_types: Vec<HashMap<String, Vec<Type>>>,
     // A stack of frames. Each frame maps a variable name to a type assumption
     // and its position in the variable list at the time of being pushed.
-    id_frames: Vec<HashMap<String, (usize, Type)>>,
+    lam_frames: Vec<HashMap<String, (usize, Type)>>,
     // for generating new type variables
     i: u32,
 }
@@ -133,7 +132,12 @@ impl Type {
 
 impl TypeEnv {
     pub fn new() -> TypeEnv {
-        TypeEnv{var_types: HashMap::new(), id_frames: Vec::new(), i: 0}
+        TypeEnv{var_types: vec![HashMap::new()], lam_frames: Vec::new(), i: 0}
+    }
+
+    /// bind a `let`-bound variable
+    fn bind(&mut self, name: String, types: Vec<Type>) {
+        self.var_types.last_mut().unwrap().insert(name, types);
     }
 
     /// Introduces fresh type variables for each id and adds them to
@@ -145,13 +149,13 @@ impl TypeEnv {
             hm.insert(id, (i, typ));
             i += 1;
         }
-        self.id_frames.push(hm);
+        self.lam_frames.push(hm);
     }
 
     /// Pops the top frame from the stack. The type assumptions are returned in the
     /// same order as the variable list that was passed to push_new_frame.
     fn pop_frame(&mut self) -> Vec<Type> {
-        let frame = self.id_frames.pop().unwrap();
+        let frame = self.lam_frames.pop().unwrap();
         let mut ret: Vec<(usize, Type)> = frame.into_iter().map(|(_, p)| p).collect();
         let mut i = 0;
         while i < ret.len() {
@@ -162,15 +166,20 @@ impl TypeEnv {
         ret.into_iter().map(|(_, t)| t).collect()
     }
 
+    /// Lookup a variable bound by a `lam`
     fn local_var_lookup(&mut self, id: &String) -> Option<Type> {
-        for frame in self.id_frames.iter().rev() {
+        for frame in self.lam_frames.iter().rev() {
             if let Some((_, typ)) = frame.get(id) { return Some(typ.clone()); }
         }
         None
     }
 
+    /// Lookup a variable bound by a `let`
     pub fn global_var_lookup(&self, id: &String) -> Option<Vec<Type>> {
-        self.var_types.get(id).map(Vec::clone)
+        for frame in self.var_types.iter().rev() {
+            if let Some(types) = frame.get(id) { return Some(types.clone()); }
+        }
+        None
     }
 }
 
@@ -180,15 +189,15 @@ impl Refinements {
     pub fn fail() -> Refinements { Refinements(Vec::new()) }
 
     /// Fails if the refinements vector is empty
-    pub fn expect_nonempty(self, expr: &ExprA) -> TypeCheckResult<Refinements> {
+    pub fn expect_nonempty(self) -> TypeCheckResult<Refinements> {
         if self.0.len() == 0 {
-            Err(TypeError::new(String::from("untypable expression"), expr))
+            Err(TypeError::new(String::from("untypable expression")))
         } else { Ok(self) }
     }
 
-    pub fn expect_type(self, expected_type: &Type, expr: &ExprA) -> TypeCheckResult<Refinements> {
+    pub fn expect_type(self, expected_type: &Type) -> TypeCheckResult<Refinements> {
         if self.0.len() == 0 {
-            Err(TypeError::new(format!("expected type {}", expected_type.to_string()), expr))
+            Err(TypeError::new(format!("expected type {}", expected_type.to_string())))
         } else { Ok(self) }
     }
 
@@ -199,9 +208,9 @@ impl Refinements {
 
     /// Applies a function to each refinement. Successes (if any) are collected
     /// and returned. Otherwise an InferenceFailed error on `expr` is returned.
-    pub fn traverse<F>(self, expr: &ExprA, f: F) -> TypeCheckResult<Refinements>
+    pub fn traverse<F>(self, f: F) -> TypeCheckResult<Refinements>
     where F: FnMut(Refinement) -> Option<Refinements> {
-        self.into_iter().filter_map(f).flatten().collect::<Refinements>().expect_nonempty(expr)
+        self.into_iter().filter_map(f).flatten().collect::<Refinements>().expect_nonempty()
     }
 }
 

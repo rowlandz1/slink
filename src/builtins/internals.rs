@@ -35,12 +35,15 @@ pub fn get_builtin_function(name: &String) -> Option<V> {
         "op*"       => vec!["x", "y"],
         "op/"       => vec!["x", "y"],
         "op%"       => vec!["x", "y"],
+        "op**"      => vec!["x", "y"],
         "op=="      => vec!["x", "y"],
         "op!="      => vec!["x", "y"],
         "op>="      => vec!["x", "y"],
         "op<="      => vec!["x", "y"],
         "op>"       => vec!["x", "y"],
         "op<"       => vec!["x", "y"],
+        "op&&"      => vec!["x", "y"],
+        "op||"      => vec!["x", "y"],
         "push"      => vec!["l", "v"],
         "range"     => vec!["n1", "n2"],
         "reduce"    => vec!["l", "v", "f"],
@@ -197,12 +200,24 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             let lhs = args.remove("x").unwrap();
             lhs % args.remove("y").unwrap()
         }
+        "op**" => {
+            let lhs = args.remove("x").unwrap();
+            lhs.pow(args.remove("y").unwrap())
+        }
         "op==" => args.get("x").unwrap().equals(args.get("y").unwrap()),
         "op!=" => args.get("x").unwrap().not_equals(args.get("y").unwrap()),
         "op>=" => args.get("x").unwrap().ge(args.get("y").unwrap()),
         "op<=" => args.get("x").unwrap().le(args.get("y").unwrap()),
         "op>" => args.get("x").unwrap().gt(args.get("y").unwrap()),
         "op<" => args.get("x").unwrap().lt(args.get("y").unwrap()),
+        "op&&" => {
+            let lhs = args.remove("x").unwrap();
+            lhs.logical_and(args.remove("y").unwrap())
+        }
+        "op||" => {
+            let lhs = args.remove("x").unwrap();
+            lhs.logical_or(args.remove("y").unwrap())
+        }
         "push" => if let V::List(mut l) = args.remove("l").unwrap() {
             l.push(args.remove("v").unwrap());
             Ok(V::List(l))

@@ -17,7 +17,8 @@ pub struct StmtA {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Assign(String, ExprA),
-    Display(ExprA),
+    FunDecl(String, Lambda),
+    Print(ExprA),
 }
 
 #[derive(Debug, Clone)]
@@ -33,10 +34,10 @@ pub enum Expr {
     Unop(String, ExprA),
     ListIdx(ExprA, AstSlice),
     MatrixIdx(ExprA, AstSlice, AstSlice),
-    /// `Lambda(argnames, expr, typeparams, paramtypes, rettype)`
-    Lambda(Vec<String>, ExprA, Vec<String>, Vec<Type>, Type),
+    Lambda(Lambda),
     FunApp(ExprA, Vec<ExprA>),
     FunKwApp(ExprA, HashMap<String, ExprA>),
+    Block(Vec<StmtA>, ExprA),
     Matrix(usize, usize, Vec<ExprA>),
     List(Vec<ExprA>),
     Tuple(Vec<ExprA>),
@@ -47,6 +48,15 @@ pub enum Expr {
     IntImag(i32),
     FloatImag(f64),
     Id(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Lambda {
+    pub params     : Vec<String>,
+    pub body       : ExprA,
+    pub typeparams : Vec<String>,
+    pub paramtypes : Vec<Type>,
+    pub rettype    : Type
 }
 
 #[derive(Debug, Clone)]

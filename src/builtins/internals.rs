@@ -48,6 +48,7 @@ pub fn get_builtin_function(name: &String) -> Option<V> {
         "range"     => vec!["n1", "n2"],
         "reduce"    => vec!["l", "v", "f"],
         "reverse"   => vec!["l"],
+        "shape"     => vec!["m"],
         "split"     => vec!["s1", "s2"],
         "sqrt"      => vec!["x"],
         "transpose" => vec!["m"],
@@ -245,6 +246,9 @@ pub fn apply_to_internal(intfun: String, mut args: HashMap<String, V>) -> EvalRe
             V::Str(s) => Ok(V::Str(s.chars().rev().collect())),
             _ => Err(EvalError::TypeMismatch)
         }
+        "shape" => if let V::Matrix(_r,_c,_) = args.remove("m").unwrap() {
+            todo!()
+        } else { Err(EvalError::TypeMismatch) }
         "split" => {
             let s1 = if let V::Str(v) = args.remove("s1").unwrap() { v }
                      else { return Err(EvalError::TypeMismatch) };

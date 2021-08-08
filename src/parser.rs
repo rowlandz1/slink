@@ -320,6 +320,10 @@ fn parse_type_pair(pair: Pair<Rule>, type_params: &Vec<String>) -> ParserResult<
             let rettype = params.pop().unwrap();
             Ok(Type::Func(params, Box::new(rettype)))
         }
+        Rule::list_type => {
+            let listof = parse_type_pair(pair.into_inner().next().unwrap(), type_params)?;
+            Ok(Type::list(listof))
+        }
         Rule::tuple_type => {
             let mut inner_rules = pair.into_inner();
             let mut params: Vec<Type> = Vec::new();
@@ -340,7 +344,7 @@ fn parse_type_pair(pair: Pair<Rule>, type_params: &Vec<String>) -> ParserResult<
                 } else { break; }
             }
             match (constructor.as_str(), params.len()) {
-                ("List", 1) => Ok(Type::list(params.pop().unwrap())),
+//                ("List", 1) => Ok(Type::list(params.pop().unwrap())),
                 _ => Err(ParserError::InvalidTypeConstructor(constructor.as_str().to_string()))
             }
         }

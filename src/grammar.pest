@@ -114,11 +114,13 @@ slice_yn = { expr ~ rangetoken }
 
 type_expr = {
     function_type
+  | list_type
   | tuple_type
   | compound_type
   | atomic_type
 }
 function_type = { "(" ~ (type_expr ~ ("," ~ type_expr)*)? ~ ")" ~ "->" ~ type_expr }
+list_type = { "[" ~ type_expr ~ "]" }
 tuple_type = { "(" ~ type_expr ~ ("," ~ type_expr)+ ~ ")" }
 compound_type = { ID ~ "<" ~ type_expr ~ ("," ~ type_expr)* ~ ">" }
 atomic_type = { ID }

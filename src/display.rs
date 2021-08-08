@@ -55,7 +55,7 @@ impl fmt::Display for Type {
             Type::Mat => write!(f, "Mat"),
             Type::Bool => write!(f, "Bool"),
             Type::Str => write!(f, "Str"),
-            Type::List(a) => write!(f, "List<{}>", a),
+            Type::List(a) => write!(f, "[{}]", a),
             Type::TVar(s) => write!(f, "{}", s),
             Type::Tuple(ts) => write!(f, "({})", ts.iter().map(Type::to_string).collect::<Vec<String>>().join(", ")),
             Type::Func(v, r) => {

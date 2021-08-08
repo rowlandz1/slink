@@ -161,19 +161,11 @@ impl SciVal {
     /// Defines behavior for "==" and "!=" operators
     pub fn equals(&self, rhs: &SciVal) -> EvalResult<SciVal> {
         match (self, rhs) {
-            (V::Bool(b1), V::Bool(b2)) => Ok(V::Bool(b1 == b2)),
-            (V::Number(n1), V::Number(n2)) => Ok(V::Bool(n1 == n2)),
-            (V::Matrix(r1, c1, m1), V::Matrix(r2, c2, m2)) => {
-                if r1 != r2 || c1 != c2 { return Ok(V::Bool(false)); }
-                Ok(V::Bool(m1.iter().zip(m2.iter()).all(|p|{ p.0 == p.1 })))
-            }
-            (V::Str(s1), V::Str(s2)) => Ok(V::Bool(s1 == s2)),
-            (V::List(v1), V::List(v2)) => {
-                for (a, b) in v1.iter().zip(v2.iter()) {
-                    if let V::Bool(false) = a.equals(b)? { return Ok(V::Bool(false)); }
-                }
-                Ok(V::Bool(true))
-            }
+            (V::Bool(_), V::Bool(_)) |
+            (V::Number(_), V::Number(_)) |
+            (V::Matrix(..), V::Matrix(..)) |
+            (V::Str(_), V::Str(_)) |
+            (V::List(_), V::List(_)) => Ok(V::Bool(self == rhs)),
             _ => Err(EvalError::TypeMismatch),
         }
     }
@@ -350,5 +342,21 @@ impl ops::Neg for SciVal {
     type Output = EvalResult<SciVal>;
     fn neg(self) -> EvalResult<SciVal> {
         V::Number(Int(0)) - self
+    }
+}
+
+impl cmp::PartialEq for SciVal {
+    fn eq(&self, other: &SciVal) -> bool {
+        match (self, other) {
+            (V::Bool(b1), V::Bool(b2)) => b1 == b2,
+            (V::Number(n1), V::Number(n2)) => n1 == n2,
+            (V::Matrix(r1, c1, m1), V::Matrix(r2, c2, m2)) => {
+                if r1 != r2 || c1 != c2 { return false; }
+                m1.iter().zip(m2.iter()).all(|p|{ p.0 == p.1 })
+            }
+            (V::Str(s1), V::Str(s2)) => s1 == s2,
+            (V::List(v1), V::List(v2)) => v1.iter().zip(v2.iter()).all(|(a,b)| a == b),
+            _ => false,
+        }
     }
 }
